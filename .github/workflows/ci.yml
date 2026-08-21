@@ -1,0 +1,66 @@
+name: CI
+
+# Corre en cada Pull Request hacia main (obligatorio) y opcionalmente en
+# push directo a main. El job se llama "tests" a propósito: es el nombre
+# estable que se debe configurar como status check obligatorio en la
+# protección de la rama main (eso se configura desde GitHub, no desde este
+# archivo).
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # El paquete civicmesh (Rol 1: Gossip/Membership) y su pyproject.toml
+      # pueden no existir todavía en esta rama si su PR aún no se integró a
+      # main. Este paso no falla en ese caso: simplemente no hay nada que
+      # instalar hasta que el código correspondiente aparezca.
+      - name: Instalar el paquete del proyecto (si existe)
+        run: |
+          if [ -f pyproject.toml ]; then
+            python -m pip install --upgrade pip
+            pip install -e .
+          else
+            echo "No se encontró pyproject.toml todavía; se omite la instalación del paquete."
+          fi
+
+      # Tests unitarios del proyecto (Gossip/Membership, Pub/Sub, datos,
+      # analítica, según se vayan incorporando). La misma llamada a
+      # unittest discover recorre también los tests de integración en
+      # memoria (sin sockets) que ya existan bajo tests/, como el
+      # escenario multi-peer de Gossip: son livianos y no requieren
+      # infraestructura externa. No bloquea el CI inicial si tests/
+      # todavía no existe en esta rama.
+      - name: Ejecutar tests unitarios del proyecto
+        run: |
+          if [ -d tests ]; then
+            python -m unittest discover -s tests -v
+          else
+            echo "No existe carpeta tests/ todavía; este paso se activará automáticamente cuando el código de dominio se incorpore (ver docs/git-flow.md)."
+          fi
+
+      # Tests de la infraestructura de agentes (scripts/agents/), que sí
+      # existen a partir de esta rama y no dependen del paquete civicmesh.
+      - name: Ejecutar tests de agentes
+        run: |
+          if [ -d scripts/agents/tests ]; then
+            python -m unittest discover -s scripts/agents/tests -t . -v
+          else
+            echo "No existe scripts/agents/tests todavía."
+          fi

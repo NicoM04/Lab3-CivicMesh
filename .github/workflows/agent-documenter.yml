@@ -1,0 +1,36 @@
+name: Agent - Documenter
+
+# Ejecutable manualmente desde GitHub Actions (workflow_dispatch) y una vez
+# al día (schedule). Nunca aprueba ni fusiona nada: solo puede crear
+# issues (ver scripts/agents/README.md).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 13 * * *" # una vez al día
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  run-documenter:
+    name: run-documenter
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Ejecutar agente Documentador
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Proveedor de IA opcional; sin configurar, el agente usa un
+          # fallback determinista de análisis estático (ver scripts/agents/README.md).
+          AGENT_API_URL: ${{ secrets.AGENT_API_URL }}
+          AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
+          AGENT_MODEL: ${{ secrets.AGENT_MODEL }}
+        run: python -m scripts.agents.documenter
