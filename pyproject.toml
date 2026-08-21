@@ -1,0 +1,13 @@
+[project]
+name = "civicmesh"
+version = "0.1.0"
+description = "CivicMesh: red P2P con Gossip/Membership y Pub/Sub (Laboratorio 3)"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["civicmesh*"]
