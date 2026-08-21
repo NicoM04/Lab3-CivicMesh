@@ -1,0 +1,43 @@
+name: Agent - PR Reviewer
+
+# Se dispara cuando el workflow "CI" termina. Comenta la PR asociada
+# únicamente si esa corrida de CI: (a) fue disparada por un pull_request, y
+# (b) terminó con conclusion == success. Nunca comenta antes de tener
+# resultado de CI, nunca sobre una corrida en rojo, y nunca aprueba ni
+# fusiona nada (ver scripts/agents/README.md y scripts/agents/pr_reviewer.py,
+# que además revalida esta misma condición por defensa en profundidad).
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+jobs:
+  run-pr-reviewer:
+    name: run-pr-reviewer
+    runs-on: ubuntu-latest
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      # Se hace checkout del branch por defecto (main), NUNCA del código de
+      # la PR que disparó el CI: este workflow corre con permisos de
+      # escritura sobre pull-requests, y ejecutar código de una PR (posible
+      # fork no confiable) en ese contexto sería inseguro. El script solo
+      # necesita leer metadata de la PR vía `gh`, no su código.
+      - name: Checkout (rama por defecto)
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Ejecutar agente Revisor de Pull Requests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python -m scripts.agents.pr_reviewer
