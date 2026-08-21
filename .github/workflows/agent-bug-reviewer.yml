@@ -1,0 +1,34 @@
+name: Agent - Bug Reviewer
+
+# Ejecutable manualmente desde GitHub Actions (workflow_dispatch) y una vez
+# al día (schedule). Nunca corrige código ni decide cambios de protocolo:
+# solo reporta hallazgos verificables como issues (ver scripts/agents/README.md).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 13 * * *" # una vez al día, desfasado del Documentador
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  run-bug-reviewer:
+    name: run-bug-reviewer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Ejecutar agente Revisor de Bugs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AGENT_API_URL: ${{ secrets.AGENT_API_URL }}
+          AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
+          AGENT_MODEL: ${{ secrets.AGENT_MODEL }}
+        run: python -m scripts.agents.bug_reviewer
