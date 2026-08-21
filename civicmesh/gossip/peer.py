@@ -7,7 +7,7 @@ transporte: eso corresponde a otras capas.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, field
 from enum import Enum
 
 
@@ -32,6 +32,7 @@ class PeerInfo:
     port: int
     status: PeerStatus = PeerStatus.ALIVE
     last_seen: float = 0.0
+    subscribed_topics: frozenset[str] = field(default_factory=frozenset)
 
     def __post_init__(self) -> None:
         if not self.peer_id:
@@ -87,6 +88,7 @@ class PeerInfo:
             "port": self.port,
             "status": self.status.value,
             "last_seen": self.last_seen,
+            "subscribed_topics": list(self.subscribed_topics),
         }
 
     @staticmethod
@@ -97,4 +99,5 @@ class PeerInfo:
             port=int(data["port"]),  # type: ignore[arg-type]
             status=PeerStatus(data["status"]),
             last_seen=float(data["last_seen"]),  # type: ignore[arg-type]
+            subscribed_topics=frozenset(data.get("subscribed_topics", [])),
         )
