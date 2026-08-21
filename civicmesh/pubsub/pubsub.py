@@ -114,17 +114,22 @@ class PubSub:
         if msg.msg_id in self.seen_ids:
             return
             
+        # Decidir reenvío ANTES de marcarlo como visto, para que should_forward
+        # no lo bloquee por su propia regla de deduplicación.
+        local_view = self.gossip_layer.get_known_peers() if self.gossip_layer else []
+        forward = self.should_forward(msg, msg.topic, local_view)
+            
+        # Ahora sí lo registramos como procesado localmente
         self.seen_ids.add(msg.msg_id)
         msg.seen_by.add(self.peer_id)
         
-        # Interés local
+        # Entregar a callbacks si hay interés local
         if self._is_local_interested(msg):
             for cb in self.callbacks:
                 cb(msg)
                 
-        # Decide reenvío
-        local_view = self.gossip_layer.get_known_peers() if self.gossip_layer else []
-        if self.should_forward(msg, msg.topic, local_view):
+        # Ejecutar reenvío si fue aprobado
+        if forward:
             msg.ttl -= 1
             msg.hop_count += 1
             self._forward_message(msg, local_view)
