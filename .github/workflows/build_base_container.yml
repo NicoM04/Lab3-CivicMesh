@@ -1,0 +1,81 @@
+# 1/2 — When the Dockerfile or pyproject.toml changes: publish the CI toolchain
+# image to GHCR, then run a smoke test inside that image (python + pytest check).
+#
+# Job graph: single job (no job-level dependencies). Steps are ordered:
+# checkout → image name → buildx → login → build/push → smoke test in container.
+name: build-base-container
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'Dockerfile'
+      - 'pyproject.toml'
+      - 'requirements.txt'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'Dockerfile'
+      - 'pyproject.toml'
+      - 'requirements.txt'
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-image-and-smoke-test:
+    name: Build, push :base, and smoke-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: GHCR image name (paths must be lowercase)
+        run: |
+          repo_lc=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE=ghcr.io/${repo_lc}:base" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push base image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.IMAGE }}
+          cache-from: type=registry,ref=${{ env.IMAGE }}
+          cache-to: type=inline
+          platforms: linux/amd64
+
+      # After a merge/push the image is in GHCR; on a PR it was only built by Buildx.
+      - name: Smoke test in container
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "Pulling published image for smoke test: ${IMAGE}"
+            if ! docker pull "${IMAGE}"; then
+              echo "::error title=Could not pull image after push::docker pull failed for \`${IMAGE}\`. Check GHCR package permissions and the **Build and push base image** step logs."
+              exit 1
+            fi
+            IMG="${IMAGE}"
+          else
+            echo "PR build: using a local image tag (nothing pushed to GHCR yet)."
+            if ! docker build -t ci-base-local -f Dockerfile .; then
+              echo "::error::Docker build failed. Fix the Dockerfile before merging."
+              exit 1
+            fi
+            IMG=ci-base-local
+          fi
+          docker run --rm "${IMG}" bash -c "python --version && python -m pytest --version"

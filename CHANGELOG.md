@@ -13,6 +13,10 @@ Laboratorio 3 se creará al terminar el laboratorio, no antes).
   llamado `tests` pensado para configurarse como status check obligatorio.
   Ejecuta los tests unitarios del proyecto (si ya existen en la rama) y los
   de `scripts/agents/`, con permisos mínimos (`contents: read`).
+- `Dockerfile` ligero en Python para unificar el entorno de los roles de CivicMesh.
+- `docker-compose.yml` base configurado para levantar una malla de 3 peers, 1 publicador y un frontend en una red interna.
+- `Makefile` con comandos estándar para el desarrollador y el CI (`test-unit`, `test-integration`, `up`, `down`).
+- Workflow de construcción de imagen base (`.github/workflows/build_base_container.yml`): construye y testea un humo (smoke test) de la imagen docker base.
 - Tres agentes automatizados auxiliares (`scripts/agents/`): Documentador,
   Revisor de bugs y Revisor de Pull Requests. Ninguno aprueba ni fusiona
   Pull Requests, ni hace push directo a `main`; los cambios de protocolo o
