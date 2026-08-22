@@ -78,4 +78,4 @@ jobs:
             fi
             IMG=ci-base-local
           fi
-          docker run --rm "${IMG}" bash -c "python --version && python -m pytest --version"
+          docker run --rm "${IMG}" bash -c "python --version && python -m pytest --version && make --version"

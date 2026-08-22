@@ -1,5 +1,10 @@
 FROM python:3.10-slim
 
+# Instalar herramientas básicas del sistema (make para ejecutar targets del Makefile)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    make \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copiar metadatos del paquete e instalar dependencias primero (capa cacheable).
