@@ -182,3 +182,37 @@ decisiones son siempre responsabilidad humana. Su documentación específica
 (qué hace cada uno, límites, deduplicación de issues, configuración
 opcional de un proveedor de IA) está en
 [scripts/agents/README.md](scripts/agents/README.md).
+
+## Levantar el entorno localmente (Docker Compose)
+Para levantar los nodos (peers, publicador y frontend) localmente con Docker Compose, ejecuta:
+
+```bash
+make up
+```
+
+Esto construirá la imagen base e iniciará la malla en red interna. Podrás acceder al frontend visitando: [http://localhost:8501](http://localhost:8501).
+
+Para bajar el entorno local y limpiar volúmenes:
+```bash
+make down
+```
+
+## Pruebas (CI/CD)
+Las pruebas unitarias y de integración son mandatorias y deben estar en verde en el CI antes de cualquier revisión de MR.
+- Ejecutar tests unitarios (debe cubrir `should_forward`, TTL, membresía, generadores con `--seed` y dataset replay): `make test-unit`
+- Ejecutar tests de integración (3 peers + 1 publicador): `make test-integration` (requiere Docker)
+- Ejecutar toda la suite: `make test`
+
+## Despliegue en Slurm (Clúster DIINF)
+En el clúster DIINF, se utiliza Slurm y un File System compartido.
+
+**Convención de directorios:**
+Toda corrida debe utilizar un subdirectorio bajo la variable de entorno `$CIVICMESH_RUNS`.
+Ejemplo: `$CIVICMESH_RUNS/<run_id>/`
+
+1. Los nodos CPU ejecutan los peers (gossip/pub-sub).
+2. Los nodos GPU (usando solo su CPU) ejecutan los generadores, frontend y sirven los datasets.
+
+## Seeds y Dataset de Calidad de Aire
+- **Seeds**: Para asegurar que los generadores sean reproducibles, se debe configurar el parámetro `--seed` de manera fija.
+- **Dataset**: La información base sobre la calidad del aire debe estar almacenada localmente o cacheada (ej. en `dataset/`) para realizar replay sin depender de APIs en tiempo real durante la defensa.

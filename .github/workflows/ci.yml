@@ -1,66 +1,98 @@
+# 2/2 — On every code change: run tests inside the published `:base` image from
+# GHCR (same ref as build-base-container.yml).
+#
+# Job graph: ensure-base-image → unit-tests
+#                              → integration-tests
 name: CI
 
-# Corre en cada Pull Request hacia main (obligatorio) y opcionalmente en
-# push directo a main. El job se llama "tests" a propósito: es el nombre
-# estable que se debe configurar como status check obligatorio en la
-# protección de la rama main (eso se configura desde GitHub, no desde este
-# archivo).
 on:
-  pull_request:
-    branches: [main]
   push:
-    branches: [main]
+    branches: ['**']
+  pull_request:
+    branches: [main, master]
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
-  tests:
-    name: tests
+  ensure-base-image:
+    name: Verify GHCR base image exists
     runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.resolve.outputs.image }}
     steps:
-      - name: Checkout
+      - id: resolve
+        name: Resolve GHCR image reference
+        run: |
+          repo_lc=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
+          img="ghcr.io/${repo_lc}:base"
+          echo "image=${img}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### CI base image"
+            echo "Expected image: \`${img}\`"
+            echo ""
+            echo "This job must pull that tag from GitHub Container Registry before **unit-tests** runs."
+            echo "The tag is created by the **build-base-container** workflow when \`Dockerfile\` changes on the default branch."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull base image from GHCR
+        run: |
+          IMAGE="${{ steps.resolve.outputs.image }}"
+          echo "Pulling: ${IMAGE}"
+          if docker pull "${IMAGE}"; then
+            echo "Base image is available."
+            exit 0
+          fi
+          echo ""
+          echo "::error title=Base image not found in GHCR::Could not pull \`${IMAGE}\`. Nothing was found at that tag (or the registry denied access)."
+          exit 1
+
+  # Tests unitarios corren DENTRO del contenedor base (sin Docker).
+  unit-tests:
+    name: Unit tests (in container)
+    needs: ensure-base-image
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.ensure-base-image.outputs.image }}
+      credentials:
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install project in editable mode
+        run: pip install --no-cache-dir -e .
+
+      - name: Run Unit Tests
+        run: make test-unit
+
+  # Tests de integración corren en el runner nativo donde Docker está disponible.
+  integration-tests:
+    name: Integration tests (docker compose)
+    needs: ensure-base-image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.10'
 
-      # El paquete civicmesh (Rol 1: Gossip/Membership) y su pyproject.toml
-      # pueden no existir todavía en esta rama si su PR aún no se integró a
-      # main. Este paso no falla en ese caso: simplemente no hay nada que
-      # instalar hasta que el código correspondiente aparezca.
-      - name: Instalar el paquete del proyecto (si existe)
-        run: |
-          if [ -f pyproject.toml ]; then
-            python -m pip install --upgrade pip
-            pip install -e .
-          else
-            echo "No se encontró pyproject.toml todavía; se omite la instalación del paquete."
-          fi
+      - name: Install project in editable mode
+        run: pip install --no-cache-dir -e . pytest
 
-      # Tests unitarios del proyecto (Gossip/Membership, Pub/Sub, datos,
-      # analítica, según se vayan incorporando). La misma llamada a
-      # unittest discover recorre también los tests de integración en
-      # memoria (sin sockets) que ya existan bajo tests/, como el
-      # escenario multi-peer de Gossip: son livianos y no requieren
-      # infraestructura externa. No bloquea el CI inicial si tests/
-      # todavía no existe en esta rama.
-      - name: Ejecutar tests unitarios del proyecto
-        run: |
-          if [ -d tests ]; then
-            python -m unittest discover -s tests -v
-          else
-            echo "No existe carpeta tests/ todavía; este paso se activará automáticamente cuando el código de dominio se incorpore (ver docs/git-flow.md)."
-          fi
-
-      # Tests de la infraestructura de agentes (scripts/agents/), que sí
-      # existen a partir de esta rama y no dependen del paquete civicmesh.
-      - name: Ejecutar tests de agentes
-        run: |
-          if [ -d scripts/agents/tests ]; then
-            python -m unittest discover -s scripts/agents/tests -t . -v
-          else
-            echo "No existe scripts/agents/tests todavía."
-          fi
+      - name: Run Integration Tests
+        run: make test-integration

@@ -1,0 +1,62 @@
+version: '3.8'
+
+networks:
+  civicmesh_net:
+    driver: bridge
+
+volumes:
+  metrics_vol:
+
+services:
+  peer-1:
+    build: .
+    image: civicmesh:base
+    networks:
+      - civicmesh_net
+    volumes:
+      - metrics_vol:/app/metrics
+    command: ["python", "-m", "src.peer", "--port", "5000", "--seed", "1234"]
+
+  peer-2:
+    build: .
+    image: civicmesh:base
+    networks:
+      - civicmesh_net
+    volumes:
+      - metrics_vol:/app/metrics
+    command: ["python", "-m", "src.peer", "--port", "5001", "--join", "peer-1:5000"]
+    depends_on:
+      - peer-1
+
+  peer-3:
+    build: .
+    image: civicmesh:base
+    networks:
+      - civicmesh_net
+    volumes:
+      - metrics_vol:/app/metrics
+    command: ["python", "-m", "src.peer", "--port", "5002", "--join", "peer-1:5000"]
+    depends_on:
+      - peer-1
+
+  publicador-a:
+    build: .
+    image: civicmesh:base
+    networks:
+      - civicmesh_net
+    command: ["python", "-m", "src.publicador", "--domain", "A", "--seed", "42"]
+    depends_on:
+      - peer-1
+
+  frontend:
+    build: .
+    image: civicmesh:base
+    networks:
+      - civicmesh_net
+    ports:
+      - "8501:8501"
+    volumes:
+      - metrics_vol:/app/metrics
+    command: ["python", "-m", "streamlit", "run", "src/frontend.py"]
+    depends_on:
+      - peer-1

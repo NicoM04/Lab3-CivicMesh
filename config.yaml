@@ -1,0 +1,9 @@
+pubsub:
+  objetivo:
+    ttl: 5
+    priority: 10
+    fanout: 3
+  subjetivo:
+    ttl: 3
+    priority: 5
+    fanout: 2
