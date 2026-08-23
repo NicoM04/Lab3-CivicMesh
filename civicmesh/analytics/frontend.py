@@ -219,6 +219,33 @@ for sim_time, group in objective_history.groupby("sim_time"):
     )
 
 
+
+# ---------------------------------------------------------
+# Convergencia temporal
+# ---------------------------------------------------------
+
+objective_history = filtered[
+    filtered["channel"] == "objetivo"
+]
+
+convergence_history = []
+
+for sim_time, group in objective_history.groupby("sim_time"):
+
+    result = calculate_convergence(
+        group["value"].tolist(),
+        tolerance=tolerance,
+    )
+
+    convergence_history.append(
+        {
+            "sim_time": sim_time,
+            "Diferencia entre peers": result["spread"],
+            "Peers con dato": result["peer_count"],
+        }
+    )
+
+
 if convergence_history:
 
     convergence_df = pd.DataFrame(
@@ -229,8 +256,21 @@ if convergence_history:
         "Convergencia del canal objetivo"
     )
 
-    st.line_chart(convergence_df)
+    st.line_chart(
+        convergence_df[
+            ["Diferencia entre peers"]
+        ]
+    )
 
+    st.subheader(
+        "Peers participantes en la convergencia"
+    )
+
+    st.line_chart(
+        convergence_df[
+            ["Peers con dato"]
+        ]
+    )
 
 # ---------------------------------------------------------
 # Percepción vs realidad

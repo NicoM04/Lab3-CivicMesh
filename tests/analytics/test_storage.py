@@ -63,3 +63,23 @@ def test_read_missing_directory(tmp_path):
     )
 
     assert records == []
+
+def test_read_metrics_ignores_invalid_line(tmp_path):
+
+    file_path = (
+        tmp_path
+        / "peer-1.jsonl"
+    )
+
+    file_path.write_text(
+        '{"value": 10}\n'
+        '{"value":',
+        encoding="utf-8",
+    )
+
+    records = read_metrics(
+        tmp_path
+    )
+
+    assert len(records) == 1
+    assert records[0]["value"] == 10
