@@ -1,0 +1,17 @@
+{"record_type": "topic_state", "peer_id": "peer-3", "domain": "air", "topic": "Santiago", "sim_time": 0, "channel": "objetivo", "value": 19}
+{"record_type": "topic_state", "peer_id": "peer-3", "domain": "air", "topic": "Santiago", "sim_time": 0, "channel": "subjetivo", "value": 23}
+{"record_type": "topic_state", "peer_id": "peer-3", "domain": "air", "topic": "Santiago", "sim_time": 1, "channel": "objetivo", "value": 24.5}
+{"record_type": "topic_state", "peer_id": "peer-3", "domain": "air", "topic": "Santiago", "sim_time": 1, "channel": "subjetivo", "value": 28}
+{"record_type": "topic_state", "peer_id": "peer-3", "domain": "air", "topic": "Santiago", "sim_time": 2, "channel": "objetivo", "value": 30}
+{"record_type": "topic_state", "peer_id": "peer-3", "domain": "air", "topic": "Santiago", "sim_time": 2, "channel": "subjetivo", "value": 35}
+{"record_type": "network_state", "peer_id": "peer-3", "sim_time": 0, "known_peers": 3, "alive_peers": 3, "dead_peers": 0}
+{"record_type": "network_state", "peer_id": "peer-3", "sim_time": 1, "known_peers": 3, "alive_peers": 3, "dead_peers": 0}
+{"record_type": "network_state", "peer_id": "peer-3", "sim_time": 2, "known_peers": 3, "alive_peers": 3, "dead_peers": 0}
+{"record_type": "topic_state", "peer_id": "peer-3", "domain": "crime", "topic": "Santiago", "sim_time": 0, "channel": "objetivo", "value": 1}
+{"record_type": "topic_state", "peer_id": "peer-3", "domain": "crime", "topic": "Santiago", "sim_time": 0, "channel": "subjetivo", "value": 0.25}
+{"record_type": "topic_state", "peer_id": "peer-3", "domain": "crime", "topic": "Santiago", "sim_time": 1, "channel": "objetivo", "value": 2}
+{"record_type": "topic_state", "peer_id": "peer-3", "domain": "crime", "topic": "Santiago", "sim_time": 1, "channel": "subjetivo", "value": 0.55}
+{"record_type": "topic_state", "peer_id": "peer-3", "domain": "crime", "topic": "Santiago", "sim_time": 2, "channel": "objetivo", "value": 3}
+{"record_type": "topic_state", "peer_id": "peer-3", "domain": "crime", "topic": "Santiago", "sim_time": 2, "channel": "subjetivo", "value": 0.8}
+{"record_type": "message_event", "peer_id": "peer-3", "sim_time": 0, "event": "received", "hop_count": 2, "ttl": 1}
+{"record_type": "message_event", "peer_id": "peer-3", "sim_time": 1, "event": "dropped", "hop_count": 2, "ttl": 0}
