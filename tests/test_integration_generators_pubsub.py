@@ -50,9 +50,13 @@ class TestMeshGeneratorsIntegration(unittest.TestCase):
         # Peer 1 conoce a Peer 2 suscrito a providencia
         self.peer2_info = make_peer("peer-providencia", ["providencia"])
         self.peer1_info = make_peer("peer-santiago", ["santiago"])
+        self.peer3_info = make_peer("peer-las-condes", ["santiago"])
 
         self.mock_gossip_peer1.get_known_peers.return_value = [self.peer2_info]
-        self.mock_gossip_peer2.get_known_peers.return_value = [self.peer1_info]
+        self.mock_gossip_peer2.get_known_peers.return_value = [
+            self.peer1_info,
+            self.peer3_info,
+        ]
 
     def test_domain_a_poisson_to_pubsub_and_perception(self) -> None:
         """Dominio A: Delitos generados se publican en canal objetivo y alimentan la percepción."""
@@ -139,7 +143,7 @@ class TestMeshGeneratorsIntegration(unittest.TestCase):
         initial_ttl = msg.ttl
 
         # Primera entrega a peer 2 -> should_forward True
-        local_view = [self.peer1_info]
+        local_view = [self.peer1_info, self.peer3_info]
         self.assertTrue(self.pubsub_peer2.should_forward(msg, "santiago", local_view))
 
         self.pubsub_peer2.handle_incoming(msg, from_peer="peer-santiago")

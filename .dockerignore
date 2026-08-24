@@ -19,3 +19,5 @@ build/
 Thumbs.db
 metrics/*.jsonl
 logs/*.log
+runs/real/
+runs/comparison/

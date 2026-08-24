@@ -79,9 +79,9 @@ jobs:
       - name: Run AI Agent Tests
         run: make test-agents
 
-  # Tests de integración corren en el runner nativo donde Docker está disponible.
+  # Tests de integración corren en el runner nativo donde Docker y red TCP están disponibles.
   integration-tests:
-    name: Integration tests (docker compose)
+    name: Integration tests (TCP network)
     needs: ensure-base-image
     runs-on: ubuntu-latest
 
