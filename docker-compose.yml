@@ -44,7 +44,22 @@ services:
     image: civicmesh:base
     networks:
       - civicmesh_net
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
     command: ["python", "-m", "src.publicador", "--domain", "A", "--seed", "42"]
+    depends_on:
+      - peer-1
+
+  publicador-b:
+    build: .
+    image: civicmesh:base
+    profiles: ["domain-b"]
+    networks:
+      - civicmesh_net
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./datasets:/app/datasets:ro
+    command: ["python", "-m", "src.publicador", "--domain", "B", "--seed", "42"]
     depends_on:
       - peer-1
 
