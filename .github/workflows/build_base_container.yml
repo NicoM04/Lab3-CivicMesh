@@ -10,12 +10,14 @@ on:
     branches: ['**']
     paths:
       - 'Dockerfile'
+      - '.dockerignore'
       - 'pyproject.toml'
       - 'requirements.txt'
   pull_request:
     branches: [main, master]
     paths:
       - 'Dockerfile'
+      - '.dockerignore'
       - 'pyproject.toml'
       - 'requirements.txt'
 
@@ -78,4 +80,4 @@ jobs:
             fi
             IMG=ci-base-local
           fi
-          docker run --rm "${IMG}" bash -c "python --version && python -m pytest --version && make --version"
+          docker run --rm "${IMG}" bash -c "python --version && python -m pytest --version && make --version && python -c 'import numpy, yaml, requests, pandas, streamlit, civicmesh.analytics, civicmesh.network, civicmesh.runtime'"

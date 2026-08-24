@@ -14,8 +14,9 @@ services:
     networks:
       - civicmesh_net
     volumes:
+      - ./config.yaml:/app/config.yaml:ro
       - metrics_vol:/app/metrics
-    command: ["python", "-m", "src.peer", "--port", "5000", "--seed", "1234"]
+    command: ["python", "scripts/run_peer.py", "--peer-id", "peer-1", "--host", "0.0.0.0", "--port", "5000", "--topic", "Santiago", "--metrics-dir", "/app/metrics"]
 
   peer-2:
     build: .
@@ -23,8 +24,9 @@ services:
     networks:
       - civicmesh_net
     volumes:
+      - ./config.yaml:/app/config.yaml:ro
       - metrics_vol:/app/metrics
-    command: ["python", "-m", "src.peer", "--port", "5001", "--join", "peer-1:5000"]
+    command: ["python", "scripts/run_peer.py", "--peer-id", "peer-2", "--host", "0.0.0.0", "--port", "5001", "--topic", "Santiago", "--seed-id", "peer-1", "--seed-host", "peer-1", "--seed-port", "5000", "--metrics-dir", "/app/metrics"]
     depends_on:
       - peer-1
 
@@ -34,8 +36,9 @@ services:
     networks:
       - civicmesh_net
     volumes:
+      - ./config.yaml:/app/config.yaml:ro
       - metrics_vol:/app/metrics
-    command: ["python", "-m", "src.peer", "--port", "5002", "--join", "peer-1:5000"]
+    command: ["python", "scripts/run_peer.py", "--peer-id", "peer-3", "--host", "0.0.0.0", "--port", "5002", "--topic", "Santiago", "--seed-id", "peer-1", "--seed-host", "peer-1", "--seed-port", "5000", "--metrics-dir", "/app/metrics"]
     depends_on:
       - peer-1
 
@@ -44,7 +47,24 @@ services:
     image: civicmesh:base
     networks:
       - civicmesh_net
-    command: ["python", "-m", "src.publicador", "--domain", "A", "--seed", "42"]
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - metrics_vol:/app/metrics
+    command: ["python", "scripts/run_publisher.py", "--domain", "crime", "--comuna", "Santiago", "--peer-id", "publisher-a", "--host", "0.0.0.0", "--port", "9100", "--seed-id", "peer-1", "--seed-host", "peer-1", "--seed-port", "5000", "--metrics-dir", "/app/metrics"]
+    depends_on:
+      - peer-1
+
+  publicador-b:
+    build: .
+    image: civicmesh:base
+    profiles: ["domain-b"]
+    networks:
+      - civicmesh_net
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./datasets:/app/datasets:ro
+      - metrics_vol:/app/metrics
+    command: ["python", "scripts/run_publisher.py", "--domain", "air", "--comuna", "Santiago", "--peer-id", "publisher-b", "--host", "0.0.0.0", "--port", "9101", "--seed-id", "peer-1", "--seed-host", "peer-1", "--seed-port", "5000", "--metrics-dir", "/app/metrics"]
     depends_on:
       - peer-1
 
@@ -57,6 +77,6 @@ services:
       - "8501:8501"
     volumes:
       - metrics_vol:/app/metrics
-    command: ["python", "-m", "streamlit", "run", "src/frontend.py"]
+    command: ["python", "-m", "streamlit", "run", "civicmesh/analytics/frontend.py", "--server.port=8501", "--server.address=0.0.0.0"]
     depends_on:
       - peer-1

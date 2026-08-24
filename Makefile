@@ -1,18 +1,38 @@
-.PHONY: test-unit test-integration test up down clean
+.PHONY: test-unit test-generators test-analytics test-network test-agents test-integration test demo-metrics frontend up down clean
 
 test-unit:
 	@echo "Running unit tests..."
-	python -m pytest tests/ -v
+	python -m pytest tests/ -v --ignore=tests/integration
+
+test-generators:
+	@echo "Running generator unit tests..."
+	python -m pytest tests/generators/ -v
+
+test-analytics:
+	@echo "Running analytics unit tests..."
+	python -m pytest tests/analytics/ -v
+
+test-network:
+	@echo "Running network transport unit tests..."
+	python -m pytest tests/network/ -v
+
+test-agents:
+	@echo "Running AI agents tests..."
+	python -m unittest discover -s scripts/agents/tests
 
 test-integration:
-	@echo "Bringing up the mesh in background for integration tests..."
-	docker compose up -d
-	@echo "Running integration tests..."
-	python -m pytest tests/ -v
-	@echo "Tearing down the mesh..."
-	docker compose down
+	@echo "Running real network TCP integration tests..."
+	python -m pytest tests/integration/ -v
 
-test: test-unit test-integration
+test: test-unit test-agents test-integration
+
+demo-metrics:
+	@echo "Generating demo metrics fixtures..."
+	python scripts/generate_demo_metrics.py
+
+frontend:
+	@echo "Launching CivicMesh Analytics Dashboard..."
+	python -m streamlit run civicmesh/analytics/frontend.py
 
 up:
 	@echo "Starting the CivicMesh local environment..."
@@ -23,5 +43,7 @@ down:
 	docker compose down -v
 
 clean:
-	@echo "Cleaning up dangling images and stopped containers..."
+	@echo "Cleaning up dangling images, stopped containers and caches..."
 	docker system prune -f
+	python -c "import pathlib, shutil; [shutil.rmtree(p) for p in pathlib.Path('.').rglob('__pycache__')]" 2>/dev/null || true
+	python -c "import pathlib, shutil; [shutil.rmtree(p) for p in pathlib.Path('.').rglob('.pytest_cache')]" 2>/dev/null || true
