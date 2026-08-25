@@ -1,0 +1,4 @@
+[civicmesh] Job 1309973 — creando directorio de corrida: /home/ceph/gcabrera/civicmesh-runs/slurm-1309973
+[civicmesh] Nodos CPU (Peers):   xicpu02, xicpu03
+[civicmesh] Nodos GPU (Pub/UI):  xigpu01, xigpu02
+[civicmesh] Limpiando procesos...

@@ -1,0 +1,45 @@
+[civicmesh] Job 1309993 — creando directorio de corrida: /home/ceph/gcabrera/Lab3-CivicMesh/civicmesh-runs/slurm-1309993
+[civicmesh] Nodos CPU (batch):  xicpu02, xicpu03
+[civicmesh] Nodos GPU (GPU):    xigpu01, xigpu02
+[civicmesh] Verificando estado de nodos GPU...
+[civicmesh] config.yaml copiado y dataset_path actualizado a ruta absoluta
+[civicmesh] hostfile.txt generado (5 peers):
+peer-1 xicpu02 9001 Santiago
+peer-2 xicpu02 9002 Maipu
+peer-3 xicpu02 9003 Pudahuel
+peer-4 xicpu03 9004 Puente_Alto
+peer-5 xicpu03 9005 La_Florida
+
+[civicmesh] === FASE 1: Lanzando peers en partición batch ===
+[civicmesh]   peer-1 → xicpu02:9001 (Santiago)
+[civicmesh]   peer-2 → xicpu02:9002 (Maipu)
+[civicmesh]   peer-3 → xicpu02:9003 (Pudahuel)
+[civicmesh]   peer-4 → xicpu03:9004 (Puente_Alto)
+[civicmesh]   peer-5 → xicpu03:9005 (La_Florida)
+[civicmesh] Esperando 5 peers (5s)...
+
+[civicmesh] === FASE 2: Lanzando publicadores en partición GPU ===
+[civicmesh]   publisher-crime-Santiago → xigpu01:9100
+[civicmesh]   publisher-crime-Puente_Alto → xigpu01:9101
+[civicmesh]   publisher-crime-Maipu → xigpu01:9102
+[civicmesh]   publisher-crime-La_Florida → xigpu01:9103
+[civicmesh]   publisher-crime-Pudahuel → xigpu01:9104
+[civicmesh]   publisher-air-Santiago → xigpu01:9105
+[civicmesh]   publisher-air-Puente_Alto → xigpu01:9106
+[civicmesh]   publisher-air-Maipu → xigpu01:9107
+[civicmesh]   publisher-air-La_Florida → xigpu01:9108
+[civicmesh]   publisher-air-Pudahuel → xigpu01:9109
+
+[civicmesh] === FASE 3: Lanzando frontend en partición GPU ===
+[civicmesh] Frontend Streamlit → xigpu02:8501
+[civicmesh] Para acceso remoto (con VPN activa):
+[civicmesh]   ssh -L 8501:xigpu02:8501 <usuario>@xi.diinf.usach.cl
+[civicmesh]   Abrir http://localhost:8501
+
+[civicmesh] === Esperando publicadores (20 pasos × 1.0s) ===
+[civicmesh] Publicadores finalizaron.
+[civicmesh] Métricas en: /home/ceph/gcabrera/Lab3-CivicMesh/civicmesh-runs/slurm-1309993/metrics/
+[civicmesh] Frontend sigue activo en xigpu02:8501
+[civicmesh] Hostfile: /home/ceph/gcabrera/Lab3-CivicMesh/civicmesh-runs/slurm-1309993/hostfile.txt
+[civicmesh] Job 1309993 finalizado.
+[civicmesh] Limpiando procesos...
