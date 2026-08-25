@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   issues: write
+  models: read # permite usar GitHub Models con el GITHUB_TOKEN automático
 
 jobs:
   run-documenter:
@@ -28,9 +29,14 @@ jobs:
       - name: Ejecutar agente Documentador
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Proveedor de IA opcional; sin configurar, el agente usa un
-          # fallback determinista de análisis estático (ver scripts/agents/README.md).
-          AGENT_API_URL: ${{ secrets.AGENT_API_URL }}
-          AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
-          AGENT_MODEL: ${{ secrets.AGENT_MODEL }}
+          # Proveedor de IA: por defecto usa GitHub Models (gratis, incluido,
+          # sin secrets que crear) vía el GITHUB_TOKEN automático. Si más
+          # adelante se configuran AGENT_API_URL/AGENT_API_KEY/AGENT_MODEL
+          # como secrets del repo (para OpenAI/Azure OpenAI/OpenRouter/etc.),
+          # esos secrets tienen prioridad. Si la llamada falla por cualquier
+          # motivo, el agente usa su fallback determinista de análisis
+          # estático (ver scripts/agents/README.md).
+          AGENT_API_URL: ${{ secrets.AGENT_API_URL || 'https://models.github.ai/inference/chat/completions' }}
+          AGENT_API_KEY: ${{ secrets.AGENT_API_KEY || secrets.GITHUB_TOKEN }}
+          AGENT_MODEL: ${{ secrets.AGENT_MODEL || 'openai/gpt-4o-mini' }}
         run: python -m scripts.agents.documenter

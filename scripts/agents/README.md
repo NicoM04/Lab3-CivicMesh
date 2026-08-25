@@ -94,11 +94,13 @@ Documentador y Revisor de bugs:
 El Revisor de PR usa el mismo mecanismo de marcador, pero sobre comentarios
 de la PR (uno por SHA), para no comentar dos veces el mismo commit.
 
-## Proveedor de IA opcional (fallback estático por defecto)
+## Proveedor de IA (GitHub Models por defecto, con fallback estático)
 
-Los tres agentes soportan, de forma completamente opcional, un proveedor
-generativo externo configurado por variables de entorno (pensadas como
-GitHub Actions secrets):
+Documentador y Revisor de bugs usan `common.generate_summary()` para
+redactar el cuerpo de cada issue con un modelo real; el Revisor de PR no
+llama a ningún proveedor (su comentario es siempre determinista).
+
+El proveedor se configura con tres variables de entorno:
 
 ```text
 AGENT_API_URL
@@ -106,27 +108,59 @@ AGENT_API_KEY
 AGENT_MODEL
 ```
 
-Ninguna tiene un valor real versionado en este repositorio. Si no están
-configuradas, o si la llamada al proveedor falla por cualquier motivo (red,
-timeout, JSON inválido, respuesta incompleta), los agentes usan un
-**fallback determinista de análisis estático**, y la salida lo deja
-explícito con la leyenda:
+`AIProviderConfig.call()` habla el formato **"chat completions" compatible
+con OpenAI** (`{"model", "messages": [...]}` → `choices[0].message.content`),
+que es el que hablan GitHub Models, OpenAI, Azure OpenAI, OpenRouter y
+equivalentes — apuntar `AGENT_API_URL` a cualquiera de ellos funciona sin
+tocar código.
+
+**Por defecto, en `agent-documenter.yml` y `agent-bug-reviewer.yml`, ya
+apunta a [GitHub Models](https://github.com/marketplace?type=models)**
+usando el `GITHUB_TOKEN` automático de cada corrida — no hace falta crear
+ninguna cuenta ni secret para que los agentes usen un modelo real:
+
+```yaml
+AGENT_API_URL: ${{ secrets.AGENT_API_URL || 'https://models.github.ai/inference/chat/completions' }}
+AGENT_API_KEY: ${{ secrets.AGENT_API_KEY || secrets.GITHUB_TOKEN }}
+AGENT_MODEL: ${{ secrets.AGENT_MODEL || 'openai/gpt-4o-mini' }}
+```
+
+Si en algún momento se configuran `AGENT_API_URL`/`AGENT_API_KEY`/`AGENT_MODEL`
+como **secrets del repositorio** (Settings → Secrets and variables →
+Actions), esos secrets tienen prioridad sobre el default de GitHub Models —
+así se puede migrar a OpenAI/Azure OpenAI/OpenRouter/etc. sin tocar código,
+solo cambiando los tres secrets. Ningún valor real está versionado en este
+repositorio.
+
+GitHub Models tiene límites de uso por minuto/día según el plan de la
+cuenta/organización (más bajos en cuentas gratuitas); si una llamada falla
+por *cualquier* motivo (red, timeout, límite de tasa, JSON inválido,
+respuesta incompleta, o simplemente porque no hay proveedor configurado),
+el agente usa automáticamente un **fallback determinista de análisis
+estático**, dejándolo explícito en la salida con la leyenda:
 
 ```text
 ANÁLISIS ESTÁTICO (sin modelo de IA disponible)
 ```
 
 Nunca se afirma que un modelo generativo produjo un resultado que en
-realidad vino del fallback estático.
+realidad vino del fallback estático. El fallback es la red de seguridad,
+no el comportamiento esperado en cada corrida.
+
+Catálogo de modelos disponibles y sus límites: revisar
+[github.com/marketplace?type=models](https://github.com/marketplace?type=models)
+en el momento de usarlo — el catálogo y los límites de GitHub Models pueden
+cambiar, y `AGENT_MODEL` acepta cualquier identificador de ese catálogo
+(formato `editor/nombre-del-modelo`).
 
 ## Permisos de GitHub Actions usados
 
 | Workflow | Permisos | Motivo |
 | --- | --- | --- |
 | `ci.yml` | `contents: read` | Solo necesita leer el código para testear. |
-| `agent-documenter.yml` | `contents: read`, `issues: write` | Lee el repo, crea issues. |
-| `agent-bug-reviewer.yml` | `contents: read`, `issues: write` | Lee el repo, crea issues. |
-| `agent-pr-reviewer.yml` | `contents: read`, `pull-requests: write`, `actions: read` | Lee el repo, comenta PRs, y lee metadata del `workflow_run` de CI que lo dispara. |
+| `agent-documenter.yml` | `contents: read`, `issues: write`, `models: read` | Lee el repo, crea issues, llama a GitHub Models con el `GITHUB_TOKEN` automático. |
+| `agent-bug-reviewer.yml` | `contents: read`, `issues: write`, `models: read` | Lee el repo, crea issues, llama a GitHub Models con el `GITHUB_TOKEN` automático. |
+| `agent-pr-reviewer.yml` | `contents: read`, `pull-requests: write`, `actions: read` | Lee el repo, comenta PRs, y lee metadata del `workflow_run` de CI que lo dispara. No usa proveedor de IA, no necesita `models: read`. |
 
 Ninguno de los cuatro tiene permisos de escritura sobre `contents` en
 `main`, y ninguno puede aprobar/fusionar Pull Requests (`pull-requests:

@@ -58,9 +58,25 @@ class AIProviderConfigTests(unittest.TestCase):
         config = AIProviderConfig(api_url="https://example.invalid", api_key="k", model="m")
         fake_response = MagicMock()
         fake_response.__enter__.return_value = fake_response
-        fake_response.read.return_value = json.dumps({"output": "hola"}).encode("utf-8")
+        fake_response.read.return_value = json.dumps(
+            {"choices": [{"message": {"role": "assistant", "content": "hola"}}]}
+        ).encode("utf-8")
         with patch("scripts.agents.common.urllib.request.urlopen", return_value=fake_response):
             self.assertEqual(config.call("prompt"), "hola")
+
+    def test_call_sends_chat_completions_payload(self) -> None:
+        config = AIProviderConfig(api_url="https://example.invalid", api_key="k", model="m")
+        fake_response = MagicMock()
+        fake_response.__enter__.return_value = fake_response
+        fake_response.read.return_value = json.dumps(
+            {"choices": [{"message": {"content": "hola"}}]}
+        ).encode("utf-8")
+        with patch("scripts.agents.common.urllib.request.urlopen", return_value=fake_response) as mock_urlopen:
+            config.call("mi prompt")
+        sent_request = mock_urlopen.call_args[0][0]
+        sent_body = json.loads(sent_request.data.decode("utf-8"))
+        self.assertEqual(sent_body["model"], "m")
+        self.assertEqual(sent_body["messages"], [{"role": "user", "content": "mi prompt"}])
 
     def test_call_returns_none_on_url_error(self) -> None:
         config = AIProviderConfig(api_url="https://example.invalid", api_key="k", model="m")
@@ -85,6 +101,22 @@ class AIProviderConfigTests(unittest.TestCase):
         fake_response = MagicMock()
         fake_response.__enter__.return_value = fake_response
         fake_response.read.return_value = json.dumps({"other": "x"}).encode("utf-8")
+        with patch("scripts.agents.common.urllib.request.urlopen", return_value=fake_response):
+            self.assertIsNone(config.call("prompt"))
+
+    def test_call_returns_none_on_empty_choices(self) -> None:
+        config = AIProviderConfig(api_url="https://example.invalid", api_key="k", model="m")
+        fake_response = MagicMock()
+        fake_response.__enter__.return_value = fake_response
+        fake_response.read.return_value = json.dumps({"choices": []}).encode("utf-8")
+        with patch("scripts.agents.common.urllib.request.urlopen", return_value=fake_response):
+            self.assertIsNone(config.call("prompt"))
+
+    def test_call_returns_none_on_missing_message_content(self) -> None:
+        config = AIProviderConfig(api_url="https://example.invalid", api_key="k", model="m")
+        fake_response = MagicMock()
+        fake_response.__enter__.return_value = fake_response
+        fake_response.read.return_value = json.dumps({"choices": [{"message": {}}]}).encode("utf-8")
         with patch("scripts.agents.common.urllib.request.urlopen", return_value=fake_response):
             self.assertIsNone(config.call("prompt"))
 
