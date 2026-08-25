@@ -1,0 +1,49 @@
+[civicmesh] Job 1309995 — creando directorio de corrida: /home/ceph/gcabrera/Lab3-CivicMesh/civicmesh-runs/slurm-1309995
+[civicmesh] Nodos asignados por Slurm: xicpu02, xicpu03
+[civicmesh] Peers:         xicpu02 (1-3), xicpu03 (4-5)
+[civicmesh] Publicadores:  xicpu02
+[civicmesh] Frontend:      xicpu03
+[civicmesh] config.yaml copiado y dataset_path actualizado a ruta absoluta
+[civicmesh] hostfile.txt generado (5 peers):
+peer-1 xicpu02 9001 Santiago
+peer-2 xicpu02 9002 Maipu
+peer-3 xicpu02 9003 Pudahuel
+peer-4 xicpu03 9004 Puente_Alto
+peer-5 xicpu03 9005 La_Florida
+
+[civicmesh] === FASE 1: Lanzando peers en partición batch ===
+[civicmesh]   peer-1 (SEED) → xicpu02:9001 (Santiago)
+[civicmesh] Esperando inicialización del seed peer (2s)...
+[civicmesh]   peer-2 → xicpu02:9002 (Maipu)
+[civicmesh]   peer-3 → xicpu02:9003 (Pudahuel)
+[civicmesh]   peer-4 → xicpu03:9004 (Puente_Alto)
+[civicmesh]   peer-5 → xicpu03:9005 (La_Florida)
+[civicmesh] Esperando 5 peers (3s)...
+
+[civicmesh] === FASE 2: Lanzando publicadores en xicpu02 ===
+[civicmesh]   publisher-crime-Santiago → xicpu02:9100
+[civicmesh]   publisher-crime-Puente_Alto → xicpu02:9101
+[civicmesh]   publisher-crime-Maipu → xicpu02:9102
+[civicmesh]   publisher-crime-La_Florida → xicpu02:9103
+[civicmesh]   publisher-crime-Pudahuel → xicpu02:9104
+[civicmesh]   publisher-air-Santiago → xicpu02:9105
+[civicmesh]   publisher-air-Puente_Alto → xicpu02:9106
+[civicmesh]   publisher-air-Maipu → xicpu02:9107
+[civicmesh]   publisher-air-La_Florida → xicpu02:9108
+[civicmesh]   publisher-air-Pudahuel → xicpu02:9109
+
+[civicmesh] === FASE 3: Lanzando frontend en xicpu03 ===
+[civicmesh] Frontend Streamlit → xicpu03:8501
+[civicmesh] Para acceso remoto (con VPN activa):
+[civicmesh]   ssh -L 8501:xicpu03:8501 <usuario>@xi.diinf.usach.cl
+[civicmesh]   Abrir http://localhost:8501
+
+[civicmesh] === Esperando publicadores (20 pasos × 1.0s) ===
+[civicmesh] Publicadores finalizaron con éxito.
+[civicmesh] Métricas generadas en: /home/ceph/gcabrera/Lab3-CivicMesh/civicmesh-runs/slurm-1309995/metrics/
+[civicmesh] Hostfile: /home/ceph/gcabrera/Lab3-CivicMesh/civicmesh-runs/slurm-1309995/hostfile.txt
+[civicmesh] AVISO: Frontend finalizó o no inició en xicpu03 (ver logs/frontend.out).
+[civicmesh] Para instalar Streamlit en el clúster: pip install --user streamlit
+[civicmesh] Manteniendo la malla activa por 5 minutos para auditoría de métricas...
+[civicmesh] Job 1309995 finalizado.
+[civicmesh] Limpiando procesos...
