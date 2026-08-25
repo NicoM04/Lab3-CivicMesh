@@ -100,6 +100,37 @@ class AIProviderConfigTests(unittest.TestCase):
         self.assertIn("410", captured.getvalue())
         self.assertNotIn("super-secret-xyz", captured.getvalue())
 
+    def test_call_includes_provider_error_body_when_readable(self) -> None:
+        # El cuerpo del error (p. ej. "modelo no encontrado") es texto
+        # publico del proveedor, no un secret, y es justo lo que hace falta
+        # para distinguir "URL/modelo mal" de "key invalida" en un 404.
+        config = AIProviderConfig(api_url="https://example.invalid", api_key="k", model="m")
+        error_payload = b'{"error": {"message": "model m is not found"}}'
+        http_error = urllib.error.HTTPError(
+            url="https://example.invalid",
+            code=404,
+            msg="Not Found",
+            hdrs=None,
+            fp=io.BytesIO(error_payload),
+        )
+        captured = io.StringIO()
+        with patch("scripts.agents.common.urllib.request.urlopen", side_effect=http_error):
+            with contextlib.redirect_stdout(captured):
+                result = config.call("prompt")
+        self.assertIsNone(result)
+        self.assertIn("model m is not found", captured.getvalue())
+
+    def test_call_does_not_crash_when_error_body_is_unreadable(self) -> None:
+        # fp=None (como en test_call_reports_http_status_code_on_http_error)
+        # simula un HTTPError sin cuerpo legible; no debe romper call().
+        config = AIProviderConfig(api_url="https://example.invalid", api_key="k", model="m")
+        http_error = urllib.error.HTTPError(
+            url="https://example.invalid", code=500, msg="Server Error", hdrs=None, fp=None
+        )
+        with patch("scripts.agents.common.urllib.request.urlopen", side_effect=http_error):
+            result = config.call("prompt")
+        self.assertIsNone(result)
+
     def test_call_returns_none_on_timeout(self) -> None:
         config = AIProviderConfig(api_url="https://example.invalid", api_key="k", model="m")
         with patch("scripts.agents.common.urllib.request.urlopen", side_effect=TimeoutError("timed out")):
@@ -153,6 +184,16 @@ class GenerateSummaryTests(unittest.TestCase):
         result = generate_summary("prompt", "detalle estatico", config=config)
         self.assertIn(STATIC_ANALYSIS_MARKER, result)
         self.assertIn("detalle estatico", result)
+
+    def test_logs_reason_when_not_configured(self) -> None:
+        # Antes de este test, un AGENT_API_KEY faltante caia al fallback
+        # sin dejar ningun rastro en el log de la corrida (justo lo que
+        # paso al probar el workflow en GitHub Actions).
+        config = AIProviderConfig(api_url=None, api_key=None, model=None)
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            generate_summary("prompt", "detalle estatico", config=config)
+        self.assertIn("no configurado", captured.getvalue())
 
     def test_uses_provider_output_when_available(self) -> None:
         config = AIProviderConfig(api_url="https://example.invalid", api_key="k", model="m")

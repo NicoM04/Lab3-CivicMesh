@@ -150,12 +150,17 @@ class AIProviderConfig:
                 raw_body = response.read()
                 data = json.loads(raw_body.decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            # El código de estado y el motivo no son sensibles (a diferencia
-            # del cuerpo de la respuesta, que sí podría serlo en algunos
-            # proveedores) — incluirlos acorta mucho el diagnóstico de fallas
-            # reales (401 auth, 404 endpoint incorrecto, 410 servicio
-            # retirado, 429 límite de tasa, etc.).
-            print(f"[agents] proveedor de IA no disponible (HTTP {exc.code}: {exc.reason})")
+            # El código de estado, el motivo y el cuerpo del error no son
+            # sensibles (es texto de error público del proveedor, nunca
+            # contiene la api_key: esta viaja solo en el header Authorization
+            # de la petición, jamás en la respuesta) — incluirlos acorta
+            # mucho el diagnóstico de fallas reales (401 auth, 404 modelo/URL
+            # incorrectos, 410 servicio retirado, 429 límite de tasa, etc.).
+            try:
+                error_body = exc.read().decode("utf-8", errors="replace")[:300]
+            except Exception:  # noqa: BLE001 - lectura best-effort, nunca debe romper el diagnóstico
+                error_body = ""
+            print(f"[agents] proveedor de IA no disponible (HTTP {exc.code}: {exc.reason}) {error_body}")
             return None
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             print(f"[agents] proveedor de IA no disponible ({type(exc).__name__})")
@@ -207,6 +212,8 @@ def generate_summary(prompt: str, static_fallback: str, config: AIProviderConfig
         result = config.call(prompt)
         if result:
             return result
+    else:
+        print("[agents] proveedor de IA no configurado (falta AGENT_API_URL/AGENT_API_KEY); usando fallback estático")
     return f"{STATIC_ANALYSIS_MARKER}\n\n{static_fallback}"
 
 
