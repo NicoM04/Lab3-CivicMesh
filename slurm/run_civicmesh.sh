@@ -7,38 +7,22 @@
 #SBATCH --time=00:30:00
 #SBATCH --output=civicmesh-%j.out
 #SBATCH --error=civicmesh-%j.err
+#SBATCH hetjob
+#SBATCH --job-name=civicmesh-gpu
+#SBATCH --partition=GPU
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=6
+#SBATCH --cpus-per-task=1
+#SBATCH --time=00:30:00
 
 # ============================================================================
 # CivicMesh — Script Slurm para el clúster Xi DIINF (USACH)
 #
-# Clúster Xi:
-#   Partición "batch" → xicpu[02-03]  (2× AMD EPYC 7513, 64 threads, 256GB)
-#   Partición "GPU"   → xigpu[01-02]  (1× AMD EPYC 7443P, 48 threads, 128GB)
-#   Shared FS: /home/xi/<user>  (NFS, visible en todos los nodos)
-#   Login:     xi.diinf.usach.cl
-#   Slurm:     22.05.2 (soporta --overlap)
-#   Python:    3.10.6
-#
-# Estrategia de despliegue:
-#   Este script se lanza con sbatch en la partición "batch" (2 nodos CPU).
-#   Los peers gossip/pub-sub corren en xicpu02 y xicpu03.
-#   Los publicadores y el frontend se lanzan en la partición "GPU" usando
-#   srun -p GPU (solo CPU del host, sin CUDA). Slurm permite lanzar steps
-#   en particiones distintas a la del job principal.
-#
-# Mapeo (Sección 5.1 del enunciado):
-#   - xicpu02, xicpu03 (batch): peers gossip/pub-sub (1 peer por comuna)
-#   - xigpu01 (GPU, solo CPU):  publicadores Dominio A + Dominio B
-#   - xigpu02 (GPU, solo CPU):  frontend Streamlit
-#
-# Uso:
-#   export CIVICMESH_RUNS=~/civicmesh-runs
-#   mkdir -p logs
-#   sbatch slurm/run_civicmesh.sh
-#
-# Acceso al frontend (desde tu máquina local, con VPN activa):
-#   ssh -L 8501:xigpu02:8501 <usuario>@xi.diinf.usach.cl
-#   Abrir http://localhost:8501
+# Mapeo según Sección 5.1 del enunciado:
+#   - 2 hosts CPU (partición batch: xicpu02, xicpu03): Peers gossip/pub-sub
+#   - 2 hosts GPU (partición GPU: xigpu01, xigpu02):  Publicadores + Frontend
+#     (usando solo la CPU del host, sin CUDA)
+#   - Shared FS (/home/ceph/...): hostfile.txt, config.yaml, datasets, metrics, logs
 # ============================================================================
 
 set -euo pipefail
@@ -69,23 +53,63 @@ trap cleanup EXIT SIGINT SIGTERM
 
 export PYTHONPATH="${REPO_DIR}:${PYTHONPATH:-}"
 
-# ----- Resolver nodos CPU asignados por Slurm (partición batch) -----
-CPU_HOSTS=($(scontrol show hostnames "${SLURM_JOB_NODELIST}"))
-if [ "${#CPU_HOSTS[@]}" -lt 2 ]; then
-    echo "[civicmesh] ERROR: Se requieren 2 nodos batch y se asignaron ${#CPU_HOSTS[@]}" >&2
-    exit 1
+# ----- Detectar o crear entorno virtual automáticamente -----
+if [ ! -f "${REPO_DIR}/.venv/bin/python3" ]; then
+    echo "[civicmesh] Entorno virtual no encontrado. Creando ${REPO_DIR}/.venv..."
+    python3 -m venv "${REPO_DIR}/.venv" 2>/dev/null || true
+    if [ -f "${REPO_DIR}/.venv/bin/pip" ]; then
+        echo "[civicmesh] Instalando dependencias (streamlit, pandas, civicmesh)..."
+        "${REPO_DIR}/.venv/bin/pip" install --upgrade pip 2>/dev/null || true
+        "${REPO_DIR}/.venv/bin/pip" install -e "${REPO_DIR}[test]" streamlit pandas 2>/dev/null || {
+            echo "[civicmesh] AVISO: pip install falló en el nodo de cómputo (posible falta de internet en este nodo)." >&2
+            echo "[civicmesh] Si falta Streamlit, ejecuta 'bash slurm/setup_env.sh' desde el nodo login." >&2
+        }
+    fi
 fi
 
-CPU_HOST_0="${CPU_HOSTS[0]}"   # Esperado: xicpu02
-CPU_HOST_1="${CPU_HOSTS[1]}"   # Esperado: xicpu03
+if [ -f "${REPO_DIR}/.venv/bin/python3" ]; then
+    PYTHON_BIN="${REPO_DIR}/.venv/bin/python3"
+    export PATH="${REPO_DIR}/.venv/bin:${PATH}"
+    echo "[civicmesh] Usando entorno virtual: ${REPO_DIR}/.venv"
+elif [ -d "${HOME}/.venv" ] && [ -f "${HOME}/.venv/bin/python3" ]; then
+    PYTHON_BIN="${HOME}/.venv/bin/python3"
+    export PATH="${HOME}/.venv/bin:${PATH}"
+    echo "[civicmesh] Usando entorno virtual de HOME: ${HOME}/.venv"
+else
+    PYTHON_BIN="python3"
+    echo "[civicmesh] Usando Python del sistema: $(which python3)"
+fi
 
-PUB_HOST="${CPU_HOST_0}"
-FRONTEND_HOST="${CPU_HOST_1}"
+# ----- Resolver nodos CPU (partición batch) y GPU (partición GPU) -----
+CPU_NODELIST="${SLURM_JOB_NODELIST_HET_GROUP_0:-${SLURM_JOB_NODELIST:-}}"
+CPU_HOSTS=($(scontrol show hostnames "${CPU_NODELIST}"))
 
-echo "[civicmesh] Nodos asignados por Slurm: ${CPU_HOST_0}, ${CPU_HOST_1}"
-echo "[civicmesh] Peers:         ${CPU_HOST_0} (1-3), ${CPU_HOST_1} (4-5)"
-echo "[civicmesh] Publicadores:  ${PUB_HOST}"
-echo "[civicmesh] Frontend:      ${FRONTEND_HOST}"
+if [ "${#CPU_HOSTS[@]}" -ge 2 ]; then
+    CPU_HOST_0="${CPU_HOSTS[0]}"   # Esperado: xicpu02
+    CPU_HOST_1="${CPU_HOSTS[1]}"   # Esperado: xicpu03
+else
+    CPU_HOST_0="${CPU_HOSTS[0]:-xicpu02}"
+    CPU_HOST_1="${CPU_HOSTS[1]:-xicpu03}"
+fi
+
+if [ -n "${SLURM_JOB_NODELIST_HET_GROUP_1:-}" ]; then
+    GPU_HOSTS=($(scontrol show hostnames "${SLURM_JOB_NODELIST_HET_GROUP_1}"))
+    GPU_HOST_0="${GPU_HOSTS[0]:-xigpu01}"   # Publicadores
+    GPU_HOST_1="${GPU_HOSTS[1]:-xigpu02}"   # Frontend
+    HET_CPU="--het-group=0"
+    HET_GPU="--het-group=1"
+    echo "[civicmesh] Modo: 4 nodos (2 CPU batch + 2 GPU)"
+else
+    GPU_HOST_0="${CPU_HOST_0}"
+    GPU_HOST_1="${CPU_HOST_1}"
+    HET_CPU=""
+    HET_GPU=""
+    echo "[civicmesh] Modo: 2 nodos batch (fallback)"
+fi
+
+echo "[civicmesh] Nodos CPU (Peers):        ${CPU_HOST_0} (1-3), ${CPU_HOST_1} (4-5)"
+echo "[civicmesh] Nodo GPU (Publicadores):  ${GPU_HOST_0}"
+echo "[civicmesh] Nodo GPU (Frontend):      ${GPU_HOST_1}"
 
 # ----- Configuración general -----
 BASE_PORT=9000
@@ -117,9 +141,6 @@ sed -i "s|dataset_path:.*|dataset_path: \"${RUN_DIR}/datasets/dataset_aire.json\
 echo "[civicmesh] config.yaml copiado y dataset_path actualizado a ruta absoluta"
 
 # ----- Generar hostfile.txt -----
-# Documenta host:port:comuna de cada peer. Los peers descubren la malla
-# vía gossip (JOIN al seed); el hostfile sirve de referencia para el
-# frontend y para debugging.
 HOSTFILE="${RUN_DIR}/hostfile.txt"
 > "${HOSTFILE}"
 
@@ -146,14 +167,23 @@ SEED_HOST="${CPU_HOST_0}"
 SEED_PORT=$((BASE_PORT + 1))
 
 # =====================================================================
-# Función de lanzamiento de procesos
+# Funciones de lanzamiento de procesos
 # =====================================================================
-launch_process() {
+launch_on_cpu() {
     local NODE="$1"
     local LOG_FILE="$2"
     local CMD="$3"
-    srun --nodes=1 --ntasks=1 --overlap --nodelist="${NODE}" \
-        bash -c "export PYTHONPATH='${REPO_DIR}'; ${CMD}" \
+    srun ${HET_CPU} --nodes=1 --ntasks=1 --overlap --nodelist="${NODE}" \
+        bash -c "export PATH='${PATH}'; export PYTHONPATH='${REPO_DIR}'; ${CMD}" \
+        > "${LOG_FILE}" 2>&1 &
+}
+
+launch_on_gpu() {
+    local NODE="$1"
+    local LOG_FILE="$2"
+    local CMD="$3"
+    srun ${HET_GPU} --nodes=1 --ntasks=1 --overlap --nodelist="${NODE}" \
+        bash -c "export PATH='${PATH}'; export PYTHONPATH='${REPO_DIR}'; ${CMD}" \
         > "${LOG_FILE}" 2>&1 &
 }
 
@@ -169,7 +199,7 @@ PEER_ID="peer-1"
 PORT=$((BASE_PORT + 1))
 COMUNA="${CPU0_COMUNAS[0]}"
 
-PEER_CMD="cd ${REPO_DIR} && python3 scripts/run_peer.py \
+PEER_CMD="cd ${REPO_DIR} && ${PYTHON_BIN} scripts/run_peer.py \
     --peer-id ${PEER_ID} \
     --host ${CPU_HOST_0} \
     --port ${PORT} \
@@ -181,7 +211,7 @@ PEER_CMD="cd ${REPO_DIR} && python3 scripts/run_peer.py \
     --metrics-dir ${RUN_DIR}/metrics"
 
 echo "[civicmesh]   ${PEER_ID} (SEED) → ${CPU_HOST_0}:${PORT} (${COMUNA})"
-launch_process "${CPU_HOST_0}" "${RUN_DIR}/logs/${PEER_ID}.out" "${PEER_CMD}"
+launch_on_cpu "${CPU_HOST_0}" "${RUN_DIR}/logs/${PEER_ID}.out" "${PEER_CMD}"
 
 # Esperar a que el seed peer esté completamente escuchando
 echo "[civicmesh] Esperando inicialización del seed peer (2s)..."
@@ -193,7 +223,7 @@ for COMUNA in "${CPU0_COMUNAS[@]:1}"; do
     PEER_ID="peer-${PEER_INDEX}"
     PORT=$((BASE_PORT + PEER_INDEX))
 
-    PEER_CMD="cd ${REPO_DIR} && python3 scripts/run_peer.py \
+    PEER_CMD="cd ${REPO_DIR} && ${PYTHON_BIN} scripts/run_peer.py \
         --peer-id ${PEER_ID} \
         --host ${CPU_HOST_0} \
         --port ${PORT} \
@@ -206,7 +236,7 @@ for COMUNA in "${CPU0_COMUNAS[@]:1}"; do
         --seed-id ${SEED_ID} --seed-host ${SEED_HOST} --seed-port ${SEED_PORT}"
 
     echo "[civicmesh]   ${PEER_ID} → ${CPU_HOST_0}:${PORT} (${COMUNA})"
-    launch_process "${CPU_HOST_0}" "${RUN_DIR}/logs/${PEER_ID}.out" "${PEER_CMD}"
+    launch_on_cpu "${CPU_HOST_0}" "${RUN_DIR}/logs/${PEER_ID}.out" "${PEER_CMD}"
 done
 
 # --- Peers en CPU_HOST_1 (xicpu03) ---
@@ -215,7 +245,7 @@ for COMUNA in "${CPU1_COMUNAS[@]}"; do
     PEER_ID="peer-${PEER_INDEX}"
     PORT=$((BASE_PORT + PEER_INDEX))
 
-    PEER_CMD="cd ${REPO_DIR} && python3 scripts/run_peer.py \
+    PEER_CMD="cd ${REPO_DIR} && ${PYTHON_BIN} scripts/run_peer.py \
         --peer-id ${PEER_ID} \
         --host ${CPU_HOST_1} \
         --port ${PORT} \
@@ -228,7 +258,7 @@ for COMUNA in "${CPU1_COMUNAS[@]}"; do
         --seed-id ${SEED_ID} --seed-host ${SEED_HOST} --seed-port ${SEED_PORT}"
 
     echo "[civicmesh]   ${PEER_ID} → ${CPU_HOST_1}:${PORT} (${COMUNA})"
-    launch_process "${CPU_HOST_1}" "${RUN_DIR}/logs/${PEER_ID}.out" "${PEER_CMD}"
+    launch_on_cpu "${CPU_HOST_1}" "${RUN_DIR}/logs/${PEER_ID}.out" "${PEER_CMD}"
 done
 
 # Dar tiempo a los peers para arrancar y hacer JOIN gossip
@@ -236,10 +266,10 @@ echo "[civicmesh] Esperando ${TOTAL_PEERS} peers (3s)..."
 sleep 3
 
 # =====================================================================
-# FASE 2: Lanzar publicadores en nodos asignados
+# FASE 2: Lanzar publicadores en nodo GPU (solo CPU del host)
 # =====================================================================
 echo ""
-echo "[civicmesh] === FASE 2: Lanzando publicadores en ${PUB_HOST} ==="
+echo "[civicmesh] === FASE 2: Lanzando publicadores en ${GPU_HOST_0} ==="
 
 PUB_PIDS=()
 PUB_PORT=9100
@@ -248,13 +278,13 @@ PUB_PORT=9100
 for COMUNA in "${COMUNAS[@]}"; do
     PUB_ID="publisher-crime-${COMUNA}"
 
-    echo "[civicmesh]   ${PUB_ID} → ${PUB_HOST}:${PUB_PORT}"
-    launch_process "${PUB_HOST}" "${RUN_DIR}/logs/${PUB_ID}.out" \
-        "cd ${REPO_DIR} && python3 scripts/run_publisher.py \
+    echo "[civicmesh]   ${PUB_ID} → ${GPU_HOST_0}:${PUB_PORT}"
+    launch_on_gpu "${GPU_HOST_0}" "${RUN_DIR}/logs/${PUB_ID}.out" \
+        "cd ${REPO_DIR} && ${PYTHON_BIN} scripts/run_publisher.py \
             --domain crime \
             --comuna ${COMUNA} \
             --peer-id ${PUB_ID} \
-            --host ${PUB_HOST} \
+            --host ${GPU_HOST_0} \
             --port ${PUB_PORT} \
             --seed-id ${SEED_ID} \
             --seed-host ${SEED_HOST} \
@@ -271,13 +301,13 @@ done
 for COMUNA in "${COMUNAS[@]}"; do
     PUB_ID="publisher-air-${COMUNA}"
 
-    echo "[civicmesh]   ${PUB_ID} → ${PUB_HOST}:${PUB_PORT}"
-    launch_process "${PUB_HOST}" "${RUN_DIR}/logs/${PUB_ID}.out" \
-        "cd ${REPO_DIR} && python3 scripts/run_publisher.py \
+    echo "[civicmesh]   ${PUB_ID} → ${GPU_HOST_0}:${PUB_PORT}"
+    launch_on_gpu "${GPU_HOST_0}" "${RUN_DIR}/logs/${PUB_ID}.out" \
+        "cd ${REPO_DIR} && ${PYTHON_BIN} scripts/run_publisher.py \
             --domain air \
             --comuna ${COMUNA} \
             --peer-id ${PUB_ID} \
-            --host ${PUB_HOST} \
+            --host ${GPU_HOST_0} \
             --port ${PUB_PORT} \
             --seed-id ${SEED_ID} \
             --seed-host ${SEED_HOST} \
@@ -291,21 +321,21 @@ for COMUNA in "${COMUNAS[@]}"; do
 done
 
 # =====================================================================
-# FASE 3: Lanzar frontend Streamlit en ${FRONTEND_HOST}
+# FASE 3: Lanzar frontend Streamlit en nodo GPU (${GPU_HOST_1})
 # =====================================================================
 echo ""
-echo "[civicmesh] === FASE 3: Lanzando frontend en ${FRONTEND_HOST} ==="
+echo "[civicmesh] === FASE 3: Lanzando frontend en ${GPU_HOST_1} ==="
 
 FRONTEND_PORT=8501
-echo "[civicmesh] Frontend Streamlit → ${FRONTEND_HOST}:${FRONTEND_PORT}"
+echo "[civicmesh] Frontend Streamlit → ${GPU_HOST_1}:${FRONTEND_PORT}"
 echo "[civicmesh] Para acceso remoto (con VPN activa):"
-echo "[civicmesh]   ssh -L ${FRONTEND_PORT}:${FRONTEND_HOST}:${FRONTEND_PORT} <usuario>@xi.diinf.usach.cl"
+echo "[civicmesh]   ssh -L ${FRONTEND_PORT}:${GPU_HOST_1}:${FRONTEND_PORT} <usuario>@xi.diinf.usach.cl"
 echo "[civicmesh]   Abrir http://localhost:${FRONTEND_PORT}"
 
-launch_process "${FRONTEND_HOST}" "${RUN_DIR}/logs/frontend.out" \
+launch_on_gpu "${GPU_HOST_1}" "${RUN_DIR}/logs/frontend.out" \
     "cd ${REPO_DIR} && \
      export CIVICMESH_METRICS_DIR='${RUN_DIR}/metrics' && \
-     python3 -m streamlit run civicmesh/analytics/frontend.py \
+     ${PYTHON_BIN} -m streamlit run civicmesh/analytics/frontend.py \
         --server.port=${FRONTEND_PORT} \
         --server.address=0.0.0.0 \
         --server.headless=true"
@@ -327,11 +357,11 @@ echo "[civicmesh] Hostfile: ${HOSTFILE}"
 
 # Verificar si el frontend sigue corriendo
 if kill -0 "${FRONTEND_PID}" 2>/dev/null; then
-    echo "[civicmesh] Frontend sigue activo en ${FRONTEND_HOST}:${FRONTEND_PORT}"
+    echo "[civicmesh] Frontend sigue activo en ${GPU_HOST_1}:${FRONTEND_PORT}"
     echo "[civicmesh] El job permanecerá activo hasta agotar --time o ser cancelado con scancel."
     wait "${FRONTEND_PID}" 2>/dev/null || true
 else
-    echo "[civicmesh] AVISO: Frontend finalizó o no inició en ${FRONTEND_HOST} (ver logs/frontend.out)."
+    echo "[civicmesh] AVISO: Frontend finalizó o no inició en ${GPU_HOST_1} (ver logs/frontend.out)."
     echo "[civicmesh] Para instalar Streamlit en el clúster: pip install --user streamlit"
     echo "[civicmesh] Manteniendo la malla activa por 5 minutos para auditoría de métricas..."
     sleep 300
