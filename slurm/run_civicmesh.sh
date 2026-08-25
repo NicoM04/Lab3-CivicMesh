@@ -43,11 +43,10 @@
 
 set -euo pipefail
 
-# Asegurar existencia del directorio de logs de Slurm
-mkdir -p logs
-
 # ----- Directorio del repositorio y de la corrida -----
-REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+cd "${REPO_DIR}"
+
 CIVICMESH_RUNS="${CIVICMESH_RUNS:-${REPO_DIR}/civicmesh-runs}"
 RUN_ID="slurm-${SLURM_JOB_ID}"
 RUN_DIR="${CIVICMESH_RUNS}/${RUN_ID}"
@@ -55,8 +54,18 @@ RUN_DIR="${CIVICMESH_RUNS}/${RUN_ID}"
 echo "[civicmesh] Job ${SLURM_JOB_ID} — creando directorio de corrida: ${RUN_DIR}"
 mkdir -p "${RUN_DIR}/metrics" "${RUN_DIR}/logs"
 
-# Limpieza automática de subprocesos al finalizar o cancelar el job
-trap 'echo "[civicmesh] Limpiando procesos..."; kill $(jobs -p) 2>/dev/null || true' EXIT SIGINT SIGTERM
+# Mover logs de SLURM a la carpeta de la corrida para no ensuciar la raíz
+mv "${REPO_DIR}/civicmesh-${SLURM_JOB_ID}.out" "${RUN_DIR}/" 2>/dev/null || true
+mv "${REPO_DIR}/civicmesh-${SLURM_JOB_ID}.err" "${RUN_DIR}/" 2>/dev/null || true
+
+# Limpieza automática de subprocesos y resguardo de logs al finalizar o cancelar el job
+cleanup() {
+    echo "[civicmesh] Limpiando procesos..."
+    kill $(jobs -p) 2>/dev/null || true
+    mv "${REPO_DIR}/civicmesh-${SLURM_JOB_ID}.out" "${RUN_DIR}/" 2>/dev/null || true
+    mv "${REPO_DIR}/civicmesh-${SLURM_JOB_ID}.err" "${RUN_DIR}/" 2>/dev/null || true
+}
+trap cleanup EXIT SIGINT SIGTERM
 
 # ----- Resolver nodos CPU asignados por Slurm (partición batch) -----
 CPU_HOSTS=($(scontrol show hostnames "${SLURM_JOB_NODELIST}"))

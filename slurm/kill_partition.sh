@@ -44,7 +44,7 @@ CPU_HOSTS=($(scontrol show hostnames "${NODELIST}"))
 CPU_HOST_0="${CPU_HOSTS[0]:-xicpu02}"
 CPU_HOST_1="${CPU_HOSTS[1]:-xicpu03}"
 
-REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 CIVICMESH_RUNS="${CIVICMESH_RUNS:-${REPO_DIR}/civicmesh-runs}"
 RUN_DIR="${CIVICMESH_RUNS}/slurm-${JOB_ID}"
