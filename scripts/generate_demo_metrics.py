@@ -1,5 +1,9 @@
-from pathlib import Path
 import shutil
+import sys
+from pathlib import Path
+
+# Asegurar que el paquete civicmesh sea importable sin requerir pip install
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from civicmesh.analytics import write_metric
 

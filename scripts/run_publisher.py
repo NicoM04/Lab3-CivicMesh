@@ -1,12 +1,12 @@
-"""Publicador real de los dominios A/B sobre CivicMesh."""
-
 from __future__ import annotations
-from pathlib import Path
-
 import argparse
+import sys
 import time
-
+from pathlib import Path
 from threading import Lock
+
+# Asegurar que el paquete civicmesh sea importable sin requerir pip install
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from civicmesh.generators.config_loader import (
     load_config,
@@ -186,7 +186,16 @@ def main() -> None:
         port=args.seed_port,
     )
 
-    runtime.join(seed)
+    # Reintentar conexión al seed durante el arranque distribuido
+    max_retries = 10
+    for attempt in range(1, max_retries + 1):
+        try:
+            runtime.join(seed)
+            break
+        except (ConnectionRefusedError, OSError) as err:
+            if attempt == max_retries:
+                raise
+            time.sleep(1.0)
 
     time.sleep(0.5)
 

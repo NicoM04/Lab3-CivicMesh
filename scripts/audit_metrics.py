@@ -1,5 +1,10 @@
 import argparse
+import sys
 from collections import Counter, defaultdict
+from pathlib import Path
+
+# Asegurar que el paquete civicmesh sea importable sin requerir pip install
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from civicmesh.analytics import (
     read_metrics,

@@ -1,10 +1,12 @@
-"""Consolida y compara los experimentos de CivicMesh."""
-
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from statistics import median
+
+# Asegurar que el paquete civicmesh sea importable sin requerir pip install
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pandas as pd
 
