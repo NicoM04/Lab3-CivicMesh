@@ -139,63 +139,63 @@ class TCPTransport:
 
     def _serve(self) -> None:
 
-        server = socket.socket(
+        with socket.socket(
             socket.AF_INET,
             socket.SOCK_STREAM,
-        )
+        ) as server:
 
-        server.setsockopt(
-            socket.SOL_SOCKET,
-            socket.SO_REUSEADDR,
-            1,
-        )
-
-        server.bind(
-            (
-                self.host,
-                self.port,
+            server.setsockopt(
+                socket.SOL_SOCKET,
+                socket.SO_REUSEADDR,
+                1,
             )
-        )
 
-        server.listen()
+            server.bind(
+                (
+                    self.host,
+                    self.port,
+                )
+            )
 
-        server.settimeout(
-            0.2
-        )
+            server.listen()
 
-        self._server_socket = server
+            server.settimeout(
+                0.2
+            )
 
-        try:
-
-            while not self._stop_event.is_set():
-
-                try:
-
-                    conn, _ = (
-                        server.accept()
-                    )
-
-                except socket.timeout:
-                    continue
-
-                except OSError:
-                    break
-
-                threading.Thread(
-                    target=self._handle_client,
-                    args=(conn,),
-                    daemon=True,
-                ).start()
-
-        finally:
+            self._server_socket = server
 
             try:
-                server.close()
 
-            except OSError:
-                pass
+                while not self._stop_event.is_set():
 
-            self._server_socket = None
+                    try:
+
+                        conn, _ = (
+                            server.accept()
+                        )
+
+                    except socket.timeout:
+                        continue
+
+                    except OSError:
+                        break
+
+                    threading.Thread(
+                        target=self._handle_client,
+                        args=(conn,),
+                        daemon=True,
+                    ).start()
+
+            finally:
+
+                try:
+                    server.close()
+
+                except OSError:
+                    pass
+
+                self._server_socket = None
 
     def _handle_client(
         self,

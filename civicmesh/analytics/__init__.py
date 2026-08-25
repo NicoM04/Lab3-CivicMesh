@@ -1,3 +1,9 @@
+"""Módulo de analítica y métricas para CivicMesh (Rol 4: Líder de Analítica y Estadística).
+
+Proporciona utilidades para el cálculo de convergencia, brecha de percepción,
+disponibilidad de peers, estadísticas de propagación y almacenamiento en JSONL.
+"""
+
 from .metrics import (
     calculate_convergence,
     calculate_perception_gap,

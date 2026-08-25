@@ -75,6 +75,7 @@ class CrimeGenerator:
         Returns:
             Diccionario {tipo_delito: conteo_entero}.
         """
+        _ = t  # El proceso de Poisson homogéneo es invariante en t
         if comuna not in self.lambdas:
             raise KeyError(f"Comuna '{comuna}' no configurada en las tasas de delitos.")
 
