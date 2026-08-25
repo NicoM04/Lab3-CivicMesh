@@ -1,0 +1,7 @@
+Uso: /var/spool/slurm/d/job1310009/slurm_script <SLURM_JOB_ID> <modo> [args...]
+
+Modos:
+  cpu0          Matar todos los peers del primer nodo CPU (xicpu02)
+  cpu1          Matar todos los peers del segundo nodo CPU (xicpu03)
+  peer <ID>     Matar un peer específico (e.g., peer-3)
+  step [ID]     Listar steps o cancelar uno específico

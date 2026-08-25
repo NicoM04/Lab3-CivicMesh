@@ -1,0 +1,7 @@
+[civicmesh] Job 1310001 — creando directorio de corrida: /home/ceph/gcabrera/Lab3-CivicMesh/slurm/civicmesh-runs/slurm-1310001
+[civicmesh] Usando entorno virtual: /home/ceph/gcabrera/Lab3-CivicMesh/slurm/.venv
+[civicmesh] Modo: 4 nodos (2 CPU batch + 2 GPU)
+[civicmesh] Nodos CPU (Peers):        xicpu02 (1-3), xicpu03 (4-5)
+[civicmesh] Nodo GPU (Publicadores):  xigpu01
+[civicmesh] Nodo GPU (Frontend):      xigpu02
+[civicmesh] Limpiando procesos...

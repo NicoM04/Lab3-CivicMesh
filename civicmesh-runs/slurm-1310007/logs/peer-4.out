@@ -1,0 +1,4 @@
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+slurmstepd: error: *** STEP 1310007.3 ON xicpu03 CANCELLED AT 2026-08-25T17:13:37 ***
+srun: forcing job termination
+srun: forcing job termination
