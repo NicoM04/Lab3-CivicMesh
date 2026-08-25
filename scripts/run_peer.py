@@ -131,7 +131,16 @@ def main() -> None:
             port=args.seed_port,
         )
 
-        runtime.join(seed)
+        # Reintentar conexión al seed durante el arranque distribuido
+        max_retries = 10
+        for attempt in range(1, max_retries + 1):
+            try:
+                runtime.join(seed)
+                break
+            except (ConnectionRefusedError, OSError) as err:
+                if attempt == max_retries:
+                    raise
+                time.sleep(1.0)
 
     print(
         f"{args.peer_id} escuchando en "

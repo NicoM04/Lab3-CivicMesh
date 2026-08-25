@@ -163,10 +163,32 @@ launch_process() {
 echo ""
 echo "[civicmesh] === FASE 1: Lanzando peers en partición batch ==="
 
-PEER_INDEX=0
+# --- Seed peer en CPU_HOST_0 (xicpu02) ---
+PEER_INDEX=1
+PEER_ID="peer-1"
+PORT=$((BASE_PORT + 1))
+COMUNA="${CPU0_COMUNAS[0]}"
 
-# --- Peers en CPU_HOST_0 (xicpu02) ---
-for COMUNA in "${CPU0_COMUNAS[@]}"; do
+PEER_CMD="cd ${REPO_DIR} && python3 scripts/run_peer.py \
+    --peer-id ${PEER_ID} \
+    --host ${CPU_HOST_0} \
+    --port ${PORT} \
+    --topic ${COMUNA} \
+    --include-neighbors \
+    --config ${RUN_DIR}/config.yaml \
+    --gossip-interval ${GOSSIP_INTERVAL} \
+    --failure-timeout ${FAILURE_TIMEOUT} \
+    --metrics-dir ${RUN_DIR}/metrics"
+
+echo "[civicmesh]   ${PEER_ID} (SEED) → ${CPU_HOST_0}:${PORT} (${COMUNA})"
+launch_process "${CPU_HOST_0}" "${RUN_DIR}/logs/${PEER_ID}.out" "${PEER_CMD}"
+
+# Esperar a que el seed peer esté completamente escuchando
+echo "[civicmesh] Esperando inicialización del seed peer (2s)..."
+sleep 2
+
+# --- Resto de peers en CPU_HOST_0 (xicpu02) ---
+for COMUNA in "${CPU0_COMUNAS[@]:1}"; do
     PEER_INDEX=$((PEER_INDEX + 1))
     PEER_ID="peer-${PEER_INDEX}"
     PORT=$((BASE_PORT + PEER_INDEX))
@@ -180,11 +202,8 @@ for COMUNA in "${CPU0_COMUNAS[@]}"; do
         --config ${RUN_DIR}/config.yaml \
         --gossip-interval ${GOSSIP_INTERVAL} \
         --failure-timeout ${FAILURE_TIMEOUT} \
-        --metrics-dir ${RUN_DIR}/metrics"
-
-    if [ "${PEER_ID}" != "${SEED_ID}" ]; then
-        PEER_CMD="${PEER_CMD} --seed-id ${SEED_ID} --seed-host ${SEED_HOST} --seed-port ${SEED_PORT}"
-    fi
+        --metrics-dir ${RUN_DIR}/metrics \
+        --seed-id ${SEED_ID} --seed-host ${SEED_HOST} --seed-port ${SEED_PORT}"
 
     echo "[civicmesh]   ${PEER_ID} → ${CPU_HOST_0}:${PORT} (${COMUNA})"
     launch_process "${CPU_HOST_0}" "${RUN_DIR}/logs/${PEER_ID}.out" "${PEER_CMD}"
@@ -213,8 +232,8 @@ for COMUNA in "${CPU1_COMUNAS[@]}"; do
 done
 
 # Dar tiempo a los peers para arrancar y hacer JOIN gossip
-echo "[civicmesh] Esperando ${TOTAL_PEERS} peers (5s)..."
-sleep 5
+echo "[civicmesh] Esperando ${TOTAL_PEERS} peers (3s)..."
+sleep 3
 
 # =====================================================================
 # FASE 2: Lanzar publicadores en nodos asignados
@@ -293,7 +312,7 @@ launch_process "${FRONTEND_HOST}" "${RUN_DIR}/logs/frontend.out" \
 FRONTEND_PID=$!
 
 # =====================================================================
-# FASE 4: Esperar publicadores y mantener frontend
+# FASE 4: Esperar publicadores y mantener la malla activa
 # =====================================================================
 echo ""
 echo "[civicmesh] === Esperando publicadores (${STEPS} pasos × ${PUB_INTERVAL}s) ==="
@@ -302,34 +321,20 @@ for PID in "${PUB_PIDS[@]}"; do
     wait "${PID}" 2>/dev/null || true
 done
 
-echo "[civicmesh] Publicadores finalizaron."
-echo "[civicmesh] Métricas en: ${RUN_DIR}/metrics/"
-echo "[civicmesh] Frontend sigue activo en ${FRONTEND_HOST}:${FRONTEND_PORT}"
+echo "[civicmesh] Publicadores finalizaron con éxito."
+echo "[civicmesh] Métricas generadas en: ${RUN_DIR}/metrics/"
 echo "[civicmesh] Hostfile: ${HOSTFILE}"
 
-# =====================================================================
-# EXPERIMENTO DE FALLO / PARTICIÓN (Sección 5.3, paso 7)
-#
-# Mientras el job está activo y el frontend corre, ejecutar manualmente
-# desde otra sesión SSH en xi.diinf.usach.cl:
-#
-#   # Opción 1: matar todos los peers de xicpu03
-#   ssh xicpu03 "pkill -f run_peer"
-#
-#   # Opción 2: cancelar un step específico
-#   squeue -s -j <JOB_ID>
-#   scancel --signal=KILL <STEP_ID>
-#
-#   # Opción 3: usar el script auxiliar
-#   bash slurm/kill_partition.sh <JOB_ID> cpu1
-#
-# Observar el efecto en:
-#   - ${RUN_DIR}/metrics/   (convergencia, drops, hops)
-#   - Frontend Streamlit    (brecha percepción–realidad)
-#   - ${RUN_DIR}/logs/      (timeouts de gossip, peers perdidos)
-# =====================================================================
-
-# Dejar el frontend corriendo hasta que Slurm cancele el job o expire --time
-wait "${FRONTEND_PID}" 2>/dev/null || true
+# Verificar si el frontend sigue corriendo
+if kill -0 "${FRONTEND_PID}" 2>/dev/null; then
+    echo "[civicmesh] Frontend sigue activo en ${FRONTEND_HOST}:${FRONTEND_PORT}"
+    echo "[civicmesh] El job permanecerá activo hasta agotar --time o ser cancelado con scancel."
+    wait "${FRONTEND_PID}" 2>/dev/null || true
+else
+    echo "[civicmesh] AVISO: Frontend finalizó o no inició en ${FRONTEND_HOST} (ver logs/frontend.out)."
+    echo "[civicmesh] Para instalar Streamlit en el clúster: pip install --user streamlit"
+    echo "[civicmesh] Manteniendo la malla activa por 5 minutos para auditoría de métricas..."
+    sleep 300
+fi
 
 echo "[civicmesh] Job ${SLURM_JOB_ID} finalizado."
