@@ -5,8 +5,8 @@
 #SBATCH --ntasks-per-node=6
 #SBATCH --cpus-per-task=1
 #SBATCH --time=00:30:00
-#SBATCH --output=logs/civicmesh-%j.out
-#SBATCH --error=logs/civicmesh-%j.err
+#SBATCH --output=civicmesh-%j.out
+#SBATCH --error=civicmesh-%j.err
 
 # ============================================================================
 # CivicMesh — Script Slurm para el clúster Xi DIINF (USACH)
@@ -46,8 +46,9 @@ set -euo pipefail
 # Asegurar existencia del directorio de logs de Slurm
 mkdir -p logs
 
-# ----- Directorio de la corrida en shared FS (NFS /home/xi) -----
-CIVICMESH_RUNS="${CIVICMESH_RUNS:-$HOME/civicmesh-runs}"
+# ----- Directorio del repositorio y de la corrida -----
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+CIVICMESH_RUNS="${CIVICMESH_RUNS:-${REPO_DIR}/civicmesh-runs}"
 RUN_ID="slurm-${SLURM_JOB_ID}"
 RUN_DIR="${CIVICMESH_RUNS}/${RUN_ID}"
 
@@ -105,7 +106,6 @@ CPU0_COMUNAS=("Santiago" "Maipu" "Pudahuel")
 CPU1_COMUNAS=("Puente_Alto" "La_Florida")
 
 # ----- Copiar config y dataset al directorio de la corrida -----
-REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cp "${REPO_DIR}/config.yaml" "${RUN_DIR}/config.yaml"
 
 if [ -d "${REPO_DIR}/datasets" ]; then
