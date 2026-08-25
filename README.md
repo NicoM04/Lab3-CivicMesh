@@ -41,11 +41,11 @@ consume una interfaz de solo lectura sobre la vista de peers (ver
 
 | Rol | Área | Responsabilidades principales |
 | --- | --- | --- |
-| Rol 1 | Capa de Red / Gossip | Representación de peers, JOIN, descubrimiento, vista parcial, rondas de Gossip, fanout, heartbeat/last_seen, detección de fallos por timeout, interfaz para Pub/Sub. |
-| Rol 2 | Pub/Sub | Topics, suscripciones, publicación y recepción de eventos, forwarding, `should_forward`, uso de la vista de peers entregada por Gossip. |
-| Rol 3 | Datos | Adquisición/carga de datasets o fuentes requeridas por CivicMesh, caché/procesamiento, preparación de los datos usados por los peers. |
-| Rol 4 | Analítica / Visualización | Métricas, análisis de resultados, visualizaciones y componentes analíticos del laboratorio. |
-| Rol 5 | Integración / CI / Ejecución | Infraestructura de integración, CI/CD, Docker, ejecución distribuida/cluster cuando corresponda, soporte a experimentos e integración del proyecto. |
+| Rol 1: Nicolás Morales| Capa de Red / Gossip | Representación de peers, JOIN, descubrimiento, vista parcial, rondas de Gossip, fanout, heartbeat/last_seen, detección de fallos por timeout, interfaz para Pub/Sub. |
+| Rol 2: Gabriel Cabrera | Pub/Sub | Topics, suscripciones, publicación y recepción de eventos, forwarding, `should_forward`, uso de la vista de peers entregada por Gossip. |
+| Rol 3: Amaru Monje | Datos | Adquisición/carga de datasets o fuentes requeridas por CivicMesh, caché/procesamiento, preparación de los datos usados por los peers. |
+| Rol 4: Francisco Riquelme | Analítica / Visualización | Métricas, análisis de resultados, visualizaciones y componentes analíticos del laboratorio. |
+| Rol 5: Thomas Gustafsson | Integración / CI / Ejecución | Infraestructura de integración, CI/CD, Docker, ejecución distribuida/cluster cuando corresponda, soporte a experimentos e integración del proyecto. |
 
 Esta tabla describe áreas funcionales, no asignaciones personales; se
 actualizará si el equipo define responsables específicos.
@@ -133,16 +133,6 @@ python -m py_compile civicmesh/gossip/*.py
 - Los issues se usan para reportar bugs, tareas y dependencias entre roles.
 - La integración de CI (cuando exista, a cargo del Rol 5) debe pasar antes
   de habilitar el merge de un PR.
-
-## Estado del proyecto
-
-| Componente | Estado |
-| --- | --- |
-| Gossip / Membership (Rol 1) | En desarrollo: dominio (peer, membership, vista parcial, gossip/fanout, heartbeat/timeout, JOIN) implementado y testeado; transporte de red real pendiente. |
-| Pub/Sub (Rol 2) | No iniciado. |
-| Datos (Rol 3) | No iniciado. |
-| Analítica / Visualización (Rol 4) | No iniciado. |
-| Integración / CI / Docker (Rol 5) | No iniciado. |
 
 ## Laboratorio 3 / Entregables
 
