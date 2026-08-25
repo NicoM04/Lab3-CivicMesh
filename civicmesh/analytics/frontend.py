@@ -1,3 +1,5 @@
+import os
+import sys
 import pandas as pd
 import streamlit as st
 
@@ -17,10 +19,20 @@ st.set_page_config(
 
 st.title("CivicMesh - Analítica")
 
+default_metrics_dir = os.environ.get("CIVICMESH_METRICS_DIR", "")
+if not default_metrics_dir:
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--metrics-dir" and idx + 1 < len(sys.argv):
+            default_metrics_dir = sys.argv[idx + 1]
+            break
+if not default_metrics_dir:
+    default_metrics_dir = "runs/demo/metrics"
+
 metrics_dir = st.sidebar.text_input(
     "Directorio de métricas",
-    "runs/demo/metrics",
+    default_metrics_dir,
 )
+
 
 tolerance = st.sidebar.number_input(
     "Tolerancia de convergencia",
