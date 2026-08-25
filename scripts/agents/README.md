@@ -130,7 +130,7 @@ tarjeta de crédito para empezar):
 ```yaml
 AGENT_API_URL: ${{ secrets.AGENT_API_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}
 AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
-AGENT_MODEL: ${{ secrets.AGENT_MODEL || 'gemini-2.0-flash' }}
+AGENT_MODEL: ${{ secrets.AGENT_MODEL || 'gemini-3.6-flash' }}
 ```
 
 A diferencia de GitHub Models, **`AGENT_API_KEY` sí hay que configurarlo
@@ -160,8 +160,13 @@ realidad vino del fallback estático. El fallback es la red de seguridad,
 no el comportamiento esperado en cada corrida. Para diagnosticar una falla,
 revisar el log de la corrida en GitHub Actions: la línea
 `[agents] proveedor de IA no disponible (...)` indica el tipo de error
-(`HTTPError` con código de estado incluido, `URLError`, `TimeoutError`,
-etc.), sin exponer nunca la API key.
+(en un `HTTPError`, incluye el código de estado *y* el cuerpo de la
+respuesta del proveedor — p. ej. así se detectó que GitHub Models estaba
+retirado, y después que `gemini-2.0-flash` había sido descontinuado a
+favor de `gemini-3.6-flash`; en otros casos, `URLError`, `TimeoutError`,
+etc.), sin exponer nunca la API key. Si `AGENT_MODEL` vuelve a quedar
+obsoleto más adelante, el mensaje de error de Gemini normalmente indica el
+modelo de reemplazo directamente.
 
 Gemini también tiene límites de uso por minuto/día en su capa gratuita, y
 el catálogo de modelos puede cambiar — revisar

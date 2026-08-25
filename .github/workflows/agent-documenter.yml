@@ -39,5 +39,5 @@ jobs:
           # sobrescribir los tres secrets, sin tocar código.
           AGENT_API_URL: ${{ secrets.AGENT_API_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}
           AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
-          AGENT_MODEL: ${{ secrets.AGENT_MODEL || 'gemini-2.0-flash' }}
+          AGENT_MODEL: ${{ secrets.AGENT_MODEL || 'gemini-3.6-flash' }}
         run: python -m scripts.agents.documenter

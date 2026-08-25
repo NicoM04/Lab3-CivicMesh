@@ -53,7 +53,11 @@ Laboratorio 3 se creará al terminar el laboratorio, no antes).
   token automático posible con un proveedor externo); sin él, el agente cae
   directamente al fallback. El fallback determinista de análisis estático
   se mantiene como red de seguridad ante cualquier falla, y ahora el log de
-  diagnóstico incluye el código HTTP de la falla (sin exponer la API key).
+  diagnóstico incluye el código HTTP y el cuerpo de la respuesta de error
+  del proveedor (sin exponer la API key) — eso permitió detectar en
+  producción que `gemini-2.0-flash` había sido descontinuado; el default
+  de `AGENT_MODEL` se actualizó a `gemini-3.6-flash` (el reemplazo que
+  indicó el propio mensaje de error de Gemini).
 
 > Nota: esta sección registra únicamente lo que introduce la rama
 > `chore/git-ci-agents-bootstrap`. El resto de los componentes de CivicMesh
