@@ -1,0 +1,67 @@
+# CivicMesh Configuration
+
+# --- Pub/Sub Configuration (Rol 2) ---
+pubsub:
+  objetivo:
+    ttl: 5
+    priority: 10
+    fanout: 3
+  subjetivo:
+    ttl: 3
+    priority: 5
+    fanout: 2
+
+# --- Data and Generators Configuration (Rol 3: Líder de Datos) ---
+seed: 42                    # Global random seed for reproducible runs
+delta_t: 1.0                # Simulation time step (hours)
+
+comunas:
+  - Santiago
+  - Puente_Alto
+  - Maipu
+  - La_Florida
+  - Pudahuel
+
+dominio_a:                  # Domain A: Crimes (Poisson stochastic events)
+  tipos_delito:
+    - robo
+    - hurto
+    - asalto
+  lambdas:                  # λ_{c,k}: Crime rates per comuna and crime type (events / delta_t)
+    Santiago:
+      robo: 0.5
+      hurto: 1.2
+      asalto: 0.3
+    Puente_Alto:
+      robo: 0.8
+      hurto: 1.5
+      asalto: 0.4
+    Maipu:
+      robo: 0.4
+      hurto: 0.9
+      asalto: 0.2
+    La_Florida:
+      robo: 0.6
+      hurto: 1.1
+      asalto: 0.35
+    Pudahuel:
+      robo: 0.7
+      hurto: 1.3
+      asalto: 0.5
+  percepcion:               # Subjective channel parameters for Domain A (Insecurity)
+    alpha: 0.8              # EMA memory retention factor
+    beta_0: -1.0            # Logistic intercept
+    beta_1: 0.4             # Weight of local stimulus memory M_c(t)
+    beta_2: 0.8             # Weight of gossip rumors P_hat_gossip(t)
+    sigma_epsilon: 0.1      # Gaussian noise std deviation
+
+dominio_b:                  # Domain B: Air Quality (Real-world data replay)
+  dataset_path: "/home/ceph/gcabrera/Lab3-CivicMesh/civicmesh-runs/slurm-1309994/datasets/dataset_aire.json"
+  percepcion:               # Subjective channel parameters for Domain B (Air Quality Perception)
+    alpha: 0.85             # EMA memory retention factor for peak memory
+    gamma: 0.6              # Bias towards retained peak memory
+    delta: 0.3              # Gossip rumor drag factor
+    sigma_epsilon: 2.0      # Gaussian noise std deviation
+    clip_min: 0.0           # Minimum physical value
+    clip_max: 500.0         # Maximum physical value
+
