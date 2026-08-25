@@ -1,0 +1,15 @@
+
+Collecting usage statistics. To deactivate, set browser.gatherUsageStats to false.
+
+2026-08-25 18:20:11.202 Uvicorn server started on 0.0.0.0:8501
+
+  You can now view your Streamlit app in your browser.
+
+  Local URL: http://localhost:8501
+  Network URL: http://158.170.35.199:8501
+  External URL: http://158.170.35.199:8501
+
+slurmstepd: error: *** STEP 1310019.15 ON xigpu02 CANCELLED AT 2026-08-25T18:50:15 DUE TO TIME LIMIT ***
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+srun: forcing job termination
+srun: forcing job termination
