@@ -1,5 +1,0 @@
-peer-1 xicpu02 9001 Santiago
-peer-2 xicpu02 9002 Maipu
-peer-3 xicpu02 9003 Pudahuel
-peer-4 xicpu03 9004 Puente_Alto
-peer-5 xicpu03 9005 La_Florida

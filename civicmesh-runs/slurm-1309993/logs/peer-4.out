@@ -1,5 +1,0 @@
-Traceback (most recent call last):
-  File "/home/ceph/gcabrera/Lab3-CivicMesh/scripts/run_peer.py", line 8, in <module>
-    from civicmesh.generators.config_loader import load_config
-srun: error: xicpu03: task 0: Exited with exit code 1
-ModuleNotFoundError: No module named 'civicmesh'
