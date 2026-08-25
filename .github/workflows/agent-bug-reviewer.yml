@@ -11,7 +11,6 @@ on:
 permissions:
   contents: read
   issues: write
-  models: read # permite usar GitHub Models con el GITHUB_TOKEN automático
 
 jobs:
   run-bug-reviewer:
@@ -30,8 +29,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Ver agent-documenter.yml: mismo esquema de proveedor de IA
-          # (GitHub Models por defecto, overridable con secrets propios).
-          AGENT_API_URL: ${{ secrets.AGENT_API_URL || 'https://models.github.ai/inference/chat/completions' }}
-          AGENT_API_KEY: ${{ secrets.AGENT_API_KEY || secrets.GITHUB_TOKEN }}
-          AGENT_MODEL: ${{ secrets.AGENT_MODEL || 'openai/gpt-4o-mini' }}
+          # (Google Gemini por defecto; requiere AGENT_API_KEY como secret).
+          AGENT_API_URL: ${{ secrets.AGENT_API_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}
+          AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
+          AGENT_MODEL: ${{ secrets.AGENT_MODEL || 'gemini-2.0-flash' }}
         run: python -m scripts.agents.bug_reviewer

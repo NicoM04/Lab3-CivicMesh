@@ -11,7 +11,6 @@ on:
 permissions:
   contents: read
   issues: write
-  models: read # permite usar GitHub Models con el GITHUB_TOKEN automático
 
 jobs:
   run-documenter:
@@ -29,14 +28,16 @@ jobs:
       - name: Ejecutar agente Documentador
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Proveedor de IA: por defecto usa GitHub Models (gratis, incluido,
-          # sin secrets que crear) vía el GITHUB_TOKEN automático. Si más
-          # adelante se configuran AGENT_API_URL/AGENT_API_KEY/AGENT_MODEL
-          # como secrets del repo (para OpenAI/Azure OpenAI/OpenRouter/etc.),
-          # esos secrets tienen prioridad. Si la llamada falla por cualquier
-          # motivo, el agente usa su fallback determinista de análisis
-          # estático (ver scripts/agents/README.md).
-          AGENT_API_URL: ${{ secrets.AGENT_API_URL || 'https://models.github.ai/inference/chat/completions' }}
-          AGENT_API_KEY: ${{ secrets.AGENT_API_KEY || secrets.GITHUB_TOKEN }}
-          AGENT_MODEL: ${{ secrets.AGENT_MODEL || 'openai/gpt-4o-mini' }}
+          # Proveedor de IA: por defecto apunta al endpoint compatible con
+          # OpenAI de Google Gemini (capa gratis vía aistudio.google.com).
+          # AGENT_API_KEY SÍ hay que configurarlo como secret del repo (no
+          # hay token automático posible para un proveedor externo) — sin
+          # él, is_configured() da False y el agente usa directamente su
+          # fallback de análisis estático, sin intentar la llamada. Si más
+          # adelante se prefiere otro proveedor compatible con OpenAI
+          # (Groq, OpenAI, Azure OpenAI, OpenRouter...), basta con
+          # sobrescribir los tres secrets, sin tocar código.
+          AGENT_API_URL: ${{ secrets.AGENT_API_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}
+          AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
+          AGENT_MODEL: ${{ secrets.AGENT_MODEL || 'gemini-2.0-flash' }}
         run: python -m scripts.agents.documenter

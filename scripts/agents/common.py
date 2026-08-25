@@ -149,6 +149,14 @@ class AIProviderConfig:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 raw_body = response.read()
                 data = json.loads(raw_body.decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            # El código de estado y el motivo no son sensibles (a diferencia
+            # del cuerpo de la respuesta, que sí podría serlo en algunos
+            # proveedores) — incluirlos acorta mucho el diagnóstico de fallas
+            # reales (401 auth, 404 endpoint incorrecto, 410 servicio
+            # retirado, 429 límite de tasa, etc.).
+            print(f"[agents] proveedor de IA no disponible (HTTP {exc.code}: {exc.reason})")
+            return None
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             print(f"[agents] proveedor de IA no disponible ({type(exc).__name__})")
             return None

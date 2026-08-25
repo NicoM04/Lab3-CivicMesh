@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import subprocess
 import unittest
@@ -82,6 +84,21 @@ class AIProviderConfigTests(unittest.TestCase):
         config = AIProviderConfig(api_url="https://example.invalid", api_key="k", model="m")
         with patch("scripts.agents.common.urllib.request.urlopen", side_effect=urllib.error.URLError("boom")):
             self.assertIsNone(config.call("prompt"))
+
+    def test_call_reports_http_status_code_on_http_error(self) -> None:
+        # Este es exactamente el diagnostico que permitio detectar que
+        # GitHub Models devolvia 410 Gone en produccion.
+        config = AIProviderConfig(api_url="https://example.invalid", api_key="super-secret-xyz", model="m")
+        http_error = urllib.error.HTTPError(
+            url="https://example.invalid", code=410, msg="Gone", hdrs=None, fp=None
+        )
+        captured = io.StringIO()
+        with patch("scripts.agents.common.urllib.request.urlopen", side_effect=http_error):
+            with contextlib.redirect_stdout(captured):
+                result = config.call("prompt")
+        self.assertIsNone(result)
+        self.assertIn("410", captured.getvalue())
+        self.assertNotIn("super-secret-xyz", captured.getvalue())
 
     def test_call_returns_none_on_timeout(self) -> None:
         config = AIProviderConfig(api_url="https://example.invalid", api_key="k", model="m")

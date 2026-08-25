@@ -39,14 +39,21 @@ Laboratorio 3 se creará al terminar el laboratorio, no antes).
 ### Changed
 
 - Documentador y Revisor de bugs ahora usan un proveedor de IA real por
-  defecto (GitHub Models, vía el `GITHUB_TOKEN` automático de cada corrida,
-  sin secrets nuevos que crear), en vez de depender solo del fallback
-  estático. `AIProviderConfig.call()` pasó a hablar el formato "chat
-  completions" compatible con OpenAI (lo hablan GitHub Models, OpenAI,
-  Azure OpenAI, OpenRouter, etc.), para poder migrar de proveedor más
-  adelante configurando `AGENT_API_URL`/`AGENT_API_KEY`/`AGENT_MODEL` como
-  secrets del repositorio, sin tocar código. El fallback determinista de
-  análisis estático se mantiene como red de seguridad ante cualquier falla.
+  defecto (Google Gemini, vía su endpoint compatible con OpenAI), en vez de
+  depender solo del fallback estático. `AIProviderConfig.call()` pasó a
+  hablar el formato "chat completions" compatible con OpenAI (lo hablan
+  Gemini, OpenAI, Groq, Azure OpenAI, OpenRouter, etc.), para poder migrar
+  de proveedor más adelante configurando
+  `AGENT_API_URL`/`AGENT_API_KEY`/`AGENT_MODEL` como secrets del
+  repositorio, sin tocar código. El default original apuntaba a GitHub
+  Models usando el `GITHUB_TOKEN` automático (sin secrets); se descartó
+  tras confirmar en producción que ese servicio responde
+  `410 Gone (github_models_retirement_brownout)` — está siendo retirado.
+  `AGENT_API_KEY` sí requiere configurarse como secret para Gemini (no hay
+  token automático posible con un proveedor externo); sin él, el agente cae
+  directamente al fallback. El fallback determinista de análisis estático
+  se mantiene como red de seguridad ante cualquier falla, y ahora el log de
+  diagnóstico incluye el código HTTP de la falla (sin exponer la API key).
 
 > Nota: esta sección registra únicamente lo que introduce la rama
 > `chore/git-ci-agents-bootstrap`. El resto de los componentes de CivicMesh
