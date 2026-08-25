@@ -67,6 +67,8 @@ cleanup() {
 }
 trap cleanup EXIT SIGINT SIGTERM
 
+export PYTHONPATH="${REPO_DIR}:${PYTHONPATH:-}"
+
 # ----- Resolver nodos CPU asignados por Slurm (partición batch) -----
 CPU_HOSTS=($(scontrol show hostnames "${SLURM_JOB_NODELIST}"))
 if [ "${#CPU_HOSTS[@]}" -lt 2 ]; then
@@ -77,26 +79,13 @@ fi
 CPU_HOST_0="${CPU_HOSTS[0]}"   # Esperado: xicpu02
 CPU_HOST_1="${CPU_HOSTS[1]}"   # Esperado: xicpu03
 
-# Nodos GPU fijos (partición "GPU" del clúster Xi)
-# Se lanzan vía srun -p GPU; no requieren estar en la asignación del job.
-GPU_HOST_0="xigpu01"
-GPU_HOST_1="xigpu02"
+PUB_HOST="${CPU_HOST_0}"
+FRONTEND_HOST="${CPU_HOST_1}"
 
-echo "[civicmesh] Nodos CPU (batch):  ${CPU_HOST_0}, ${CPU_HOST_1}"
-echo "[civicmesh] Nodos GPU (GPU):    ${GPU_HOST_0}, ${GPU_HOST_1}"
-
-# Verificar disponibilidad de los nodos GPU
-echo "[civicmesh] Verificando estado de nodos GPU..."
-GPU_STATE=$(sinfo -p GPU --noheader -o "%T" 2>/dev/null || echo "unknown")
-if [[ "${GPU_STATE}" == *"down"* ]] || [[ "${GPU_STATE}" == *"drain"* ]]; then
-    echo "[civicmesh] ADVERTENCIA: Partición GPU reporta estado '${GPU_STATE}'." >&2
-    echo "[civicmesh] Los publicadores y frontend se ejecutarán en los nodos batch como fallback." >&2
-    GPU_HOST_0="${CPU_HOST_0}"
-    GPU_HOST_1="${CPU_HOST_1}"
-    GPU_PARTITION=""
-else
-    GPU_PARTITION="-p GPU"
-fi
+echo "[civicmesh] Nodos asignados por Slurm: ${CPU_HOST_0}, ${CPU_HOST_1}"
+echo "[civicmesh] Peers:         ${CPU_HOST_0} (1-3), ${CPU_HOST_1} (4-5)"
+echo "[civicmesh] Publicadores:  ${PUB_HOST}"
+echo "[civicmesh] Frontend:      ${FRONTEND_HOST}"
 
 # ----- Configuración general -----
 BASE_PORT=9000
@@ -157,36 +146,15 @@ SEED_HOST="${CPU_HOST_0}"
 SEED_PORT=$((BASE_PORT + 1))
 
 # =====================================================================
-# Funciones auxiliares de lanzamiento
+# Función de lanzamiento de procesos
 # =====================================================================
-
-# Lanzar proceso en un nodo de la partición batch (ya asignado al job)
-launch_on_batch() {
+launch_process() {
     local NODE="$1"
     local LOG_FILE="$2"
     local CMD="$3"
     srun --nodes=1 --ntasks=1 --overlap --nodelist="${NODE}" \
-        bash -c "${CMD}" \
+        bash -c "export PYTHONPATH='${REPO_DIR}'; ${CMD}" \
         > "${LOG_FILE}" 2>&1 &
-}
-
-# Lanzar proceso en un nodo GPU (partición GPU, cross-partition step)
-# Si GPU no está disponible, cae al nodo batch de fallback.
-launch_on_gpu() {
-    local NODE="$1"
-    local LOG_FILE="$2"
-    local CMD="$3"
-    if [ -n "${GPU_PARTITION}" ]; then
-        # Cross-partition step: lanzar en partición GPU desde job batch
-        srun ${GPU_PARTITION} --nodes=1 --ntasks=1 --nodelist="${NODE}" \
-            bash -c "${CMD}" \
-            > "${LOG_FILE}" 2>&1 &
-    else
-        # Fallback: correr en nodo batch
-        srun --nodes=1 --ntasks=1 --overlap --nodelist="${NODE}" \
-            bash -c "${CMD}" \
-            > "${LOG_FILE}" 2>&1 &
-    fi
 }
 
 # =====================================================================
@@ -219,7 +187,7 @@ for COMUNA in "${CPU0_COMUNAS[@]}"; do
     fi
 
     echo "[civicmesh]   ${PEER_ID} → ${CPU_HOST_0}:${PORT} (${COMUNA})"
-    launch_on_batch "${CPU_HOST_0}" "${RUN_DIR}/logs/${PEER_ID}.out" "${PEER_CMD}"
+    launch_process "${CPU_HOST_0}" "${RUN_DIR}/logs/${PEER_ID}.out" "${PEER_CMD}"
 done
 
 # --- Peers en CPU_HOST_1 (xicpu03) ---
@@ -241,7 +209,7 @@ for COMUNA in "${CPU1_COMUNAS[@]}"; do
         --seed-id ${SEED_ID} --seed-host ${SEED_HOST} --seed-port ${SEED_PORT}"
 
     echo "[civicmesh]   ${PEER_ID} → ${CPU_HOST_1}:${PORT} (${COMUNA})"
-    launch_on_batch "${CPU_HOST_1}" "${RUN_DIR}/logs/${PEER_ID}.out" "${PEER_CMD}"
+    launch_process "${CPU_HOST_1}" "${RUN_DIR}/logs/${PEER_ID}.out" "${PEER_CMD}"
 done
 
 # Dar tiempo a los peers para arrancar y hacer JOIN gossip
@@ -249,25 +217,25 @@ echo "[civicmesh] Esperando ${TOTAL_PEERS} peers (5s)..."
 sleep 5
 
 # =====================================================================
-# FASE 2: Lanzar publicadores en nodos GPU (solo CPU del host)
+# FASE 2: Lanzar publicadores en nodos asignados
 # =====================================================================
 echo ""
-echo "[civicmesh] === FASE 2: Lanzando publicadores en partición GPU ==="
+echo "[civicmesh] === FASE 2: Lanzando publicadores en ${PUB_HOST} ==="
 
 PUB_PIDS=()
 PUB_PORT=9100
 
-# --- Publicadores Dominio A (delitos) en xigpu01 ---
+# --- Publicadores Dominio A (delitos) ---
 for COMUNA in "${COMUNAS[@]}"; do
     PUB_ID="publisher-crime-${COMUNA}"
 
-    echo "[civicmesh]   ${PUB_ID} → ${GPU_HOST_0}:${PUB_PORT}"
-    launch_on_gpu "${GPU_HOST_0}" "${RUN_DIR}/logs/${PUB_ID}.out" \
+    echo "[civicmesh]   ${PUB_ID} → ${PUB_HOST}:${PUB_PORT}"
+    launch_process "${PUB_HOST}" "${RUN_DIR}/logs/${PUB_ID}.out" \
         "cd ${REPO_DIR} && python3 scripts/run_publisher.py \
             --domain crime \
             --comuna ${COMUNA} \
             --peer-id ${PUB_ID} \
-            --host ${GPU_HOST_0} \
+            --host ${PUB_HOST} \
             --port ${PUB_PORT} \
             --seed-id ${SEED_ID} \
             --seed-host ${SEED_HOST} \
@@ -280,17 +248,17 @@ for COMUNA in "${COMUNAS[@]}"; do
     PUB_PORT=$((PUB_PORT + 1))
 done
 
-# --- Publicadores Dominio B (calidad del aire) en xigpu01 ---
+# --- Publicadores Dominio B (calidad del aire) ---
 for COMUNA in "${COMUNAS[@]}"; do
     PUB_ID="publisher-air-${COMUNA}"
 
-    echo "[civicmesh]   ${PUB_ID} → ${GPU_HOST_0}:${PUB_PORT}"
-    launch_on_gpu "${GPU_HOST_0}" "${RUN_DIR}/logs/${PUB_ID}.out" \
+    echo "[civicmesh]   ${PUB_ID} → ${PUB_HOST}:${PUB_PORT}"
+    launch_process "${PUB_HOST}" "${RUN_DIR}/logs/${PUB_ID}.out" \
         "cd ${REPO_DIR} && python3 scripts/run_publisher.py \
             --domain air \
             --comuna ${COMUNA} \
             --peer-id ${PUB_ID} \
-            --host ${GPU_HOST_0} \
+            --host ${PUB_HOST} \
             --port ${PUB_PORT} \
             --seed-id ${SEED_ID} \
             --seed-host ${SEED_HOST} \
@@ -304,18 +272,18 @@ for COMUNA in "${COMUNAS[@]}"; do
 done
 
 # =====================================================================
-# FASE 3: Lanzar frontend Streamlit en xigpu02
+# FASE 3: Lanzar frontend Streamlit en ${FRONTEND_HOST}
 # =====================================================================
 echo ""
-echo "[civicmesh] === FASE 3: Lanzando frontend en partición GPU ==="
+echo "[civicmesh] === FASE 3: Lanzando frontend en ${FRONTEND_HOST} ==="
 
 FRONTEND_PORT=8501
-echo "[civicmesh] Frontend Streamlit → ${GPU_HOST_1}:${FRONTEND_PORT}"
+echo "[civicmesh] Frontend Streamlit → ${FRONTEND_HOST}:${FRONTEND_PORT}"
 echo "[civicmesh] Para acceso remoto (con VPN activa):"
-echo "[civicmesh]   ssh -L ${FRONTEND_PORT}:${GPU_HOST_1}:${FRONTEND_PORT} <usuario>@xi.diinf.usach.cl"
+echo "[civicmesh]   ssh -L ${FRONTEND_PORT}:${FRONTEND_HOST}:${FRONTEND_PORT} <usuario>@xi.diinf.usach.cl"
 echo "[civicmesh]   Abrir http://localhost:${FRONTEND_PORT}"
 
-launch_on_gpu "${GPU_HOST_1}" "${RUN_DIR}/logs/frontend.out" \
+launch_process "${FRONTEND_HOST}" "${RUN_DIR}/logs/frontend.out" \
     "cd ${REPO_DIR} && \
      export CIVICMESH_METRICS_DIR='${RUN_DIR}/metrics' && \
      python3 -m streamlit run civicmesh/analytics/frontend.py \
@@ -336,7 +304,7 @@ done
 
 echo "[civicmesh] Publicadores finalizaron."
 echo "[civicmesh] Métricas en: ${RUN_DIR}/metrics/"
-echo "[civicmesh] Frontend sigue activo en ${GPU_HOST_1}:${FRONTEND_PORT}"
+echo "[civicmesh] Frontend sigue activo en ${FRONTEND_HOST}:${FRONTEND_PORT}"
 echo "[civicmesh] Hostfile: ${HOSTFILE}"
 
 # =====================================================================

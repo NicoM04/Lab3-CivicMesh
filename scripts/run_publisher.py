@@ -1,12 +1,12 @@
-"""Publicador real de los dominios A/B sobre CivicMesh."""
-
 from __future__ import annotations
-from pathlib import Path
-
 import argparse
+import sys
 import time
-
+from pathlib import Path
 from threading import Lock
+
+# Asegurar que el paquete civicmesh sea importable sin requerir pip install
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from civicmesh.generators.config_loader import (
     load_config,

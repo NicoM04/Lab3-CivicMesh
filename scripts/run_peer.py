@@ -1,9 +1,12 @@
-"""Levanta un peer CivicMesh real por TCP."""
-
 from __future__ import annotations
 
 import argparse
+import sys
 import time
+from pathlib import Path
+
+# Asegurar que el paquete civicmesh sea importable sin requerir pip install
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from civicmesh.generators.config_loader import load_config
 from civicmesh.gossip.peer import PeerInfo
