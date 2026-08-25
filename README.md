@@ -184,35 +184,190 @@ opcional de un proveedor de IA) está en
 [scripts/agents/README.md](scripts/agents/README.md).
 
 ## Levantar el entorno localmente (Docker Compose)
+
 Para levantar los nodos (peers, publicador y frontend) localmente con Docker Compose, ejecuta:
 
 ```bash
 make up
 ```
 
-Esto construirá la imagen base e iniciará la malla en red interna. Podrás acceder al frontend visitando: [http://localhost:8501](http://localhost:8501).
+Esto construirá la imagen base e iniciará la malla en red interna con:
+- **3 peers** (`peer-1`, `peer-2`, `peer-3`) con gossip/pub-sub sobre TCP.
+- **Publicador Dominio A** (delitos) usando `scripts/run_publisher.py --domain crime`.
+- **Frontend** Streamlit en [http://localhost:8501](http://localhost:8501).
+
+Para también levantar el publicador de Dominio B (calidad del aire):
+
+```bash
+docker compose --profile domain-b up --build
+```
 
 Para bajar el entorno local y limpiar volúmenes:
+
 ```bash
 make down
 ```
 
+### Ejecución local sin Docker
+
+Para ejecutar la malla directamente en tu máquina (requiere Python ≥ 3.10):
+
+```bash
+# Instalar el paquete en modo editable
+pip install -e .[test]
+
+# Terminal 1: Peer seed
+python scripts/run_peer.py --peer-id peer-1 --host 127.0.0.1 --port 9001 --topic Santiago --metrics-dir runs/local/metrics
+
+# Terminal 2: Peer 2 (hace JOIN al seed)
+python scripts/run_peer.py --peer-id peer-2 --host 127.0.0.1 --port 9002 --topic Santiago \
+    --seed-id peer-1 --seed-host 127.0.0.1 --seed-port 9001 --metrics-dir runs/local/metrics
+
+# Terminal 3: Peer 3
+python scripts/run_peer.py --peer-id peer-3 --host 127.0.0.1 --port 9003 --topic Santiago \
+    --seed-id peer-1 --seed-host 127.0.0.1 --seed-port 9001 --metrics-dir runs/local/metrics
+
+# Terminal 4: Publicador Dominio A (delitos)
+python scripts/run_publisher.py --domain crime --comuna Santiago --peer-id publisher-a \
+    --host 127.0.0.1 --port 9100 --seed-id peer-1 --seed-host 127.0.0.1 --seed-port 9001 \
+    --metrics-dir runs/local/metrics --steps 20
+
+# Terminal 5: Publicador Dominio B (calidad del aire)
+python scripts/run_publisher.py --domain air --comuna Santiago --peer-id publisher-b \
+    --host 127.0.0.1 --port 9101 --seed-id peer-1 --seed-host 127.0.0.1 --seed-port 9001 \
+    --metrics-dir runs/local/metrics --steps 20
+
+# Terminal 6: Frontend
+python -m streamlit run civicmesh/analytics/frontend.py
+```
+
+El frontend se abre automáticamente en [http://localhost:8501](http://localhost:8501). En la barra lateral, apunta el directorio de métricas a `runs/local/metrics`.
+
 ## Pruebas (CI/CD)
+
 Las pruebas unitarias y de integración son mandatorias y deben estar en verde en el CI antes de cualquier revisión de MR.
-- Ejecutar tests unitarios (debe cubrir `should_forward`, TTL, membresía, generadores con `--seed` y dataset replay): `make test-unit`
-- Ejecutar tests de integración (3 peers + 1 publicador): `make test-integration` (requiere Docker)
-- Ejecutar toda la suite: `make test`
+
+| Comando | Qué ejecuta |
+| --- | --- |
+| `make test-unit` | Tests unitarios (gossip, pubsub, generadores, analytics, network) — excluye integración TCP |
+| `make test-generators` | Solo tests de generadores (Dominio A y B) |
+| `make test-analytics` | Solo tests del módulo de analítica |
+| `make test-network` | Solo tests del transporte TCP |
+| `make test-agents` | Tests de los 3 agentes de IA |
+| `make test-integration` | Tests de integración TCP multi-peer (3 peers reales en puertos efímeros) |
+| `make test` | Suite completa: `test-unit` + `test-agents` + `test-integration` |
+
+```bash
+# Suite completa
+make test
+
+# Solo unitarios (rápido, sin red TCP)
+make test-unit
+
+# Solo integración TCP (levanta peers reales)
+make test-integration
+```
 
 ## Despliegue en Slurm (Clúster DIINF)
-En el clúster DIINF, se utiliza Slurm y un File System compartido.
 
-**Convención de directorios:**
-Toda corrida debe utilizar un subdirectorio bajo la variable de entorno `$CIVICMESH_RUNS`.
-Ejemplo: `$CIVICMESH_RUNS/<run_id>/`
+En el clúster DIINF, se utiliza Slurm y un filesystem compartido (shared FS). El script `slurm/run_civicmesh.sh` automatiza todo el despliegue.
 
-1. Los nodos CPU ejecutan los peers (gossip/pub-sub).
-2. Los nodos GPU (usando solo su CPU) ejecutan los generadores, frontend y sirven los datasets.
+### Convención de directorios (shared FS)
+
+Toda corrida utiliza un subdirectorio bajo la variable de entorno `$CIVICMESH_RUNS`:
+
+```text
+$CIVICMESH_RUNS/<run_id>/
+├── hostfile.txt     # peer_id host port (una línea por peer)
+├── config.yaml      # Configuración de Pub/Sub, generadores y percepción
+├── datasets/        # Dataset de calidad del aire para replay
+├── metrics/         # Telemetría JSONL por peer (topic_state, network_state, message_event)
+└── logs/            # stdout/stderr de cada proceso
+```
+
+En Slurm, `<run_id>` es `slurm-${SLURM_JOB_ID}`; en local se puede usar un id propio (p. ej. `local-${USER}-$(date +%s)`).
+
+### Mapeo de procesos
+
+| Recurso Slurm | Qué corre | Puerto(s) |
+| --- | --- | --- |
+| **2 nodos CPU** | 2 peers por nodo (4 peers total) — gossip + pub/sub + telemetría | 9001–9004 |
+| **Nodo GPU 0** (solo CPU) | Publicador Dominio A (delitos) + Publicador Dominio B (aire) | 9100, 9101 |
+| **Nodo GPU 1** (solo CPU) | Frontend Streamlit | 8501 |
+
+### Lanzar una corrida
+
+```bash
+# 1. Definir la raíz de corridas (shared FS visible desde todos los nodos)
+export CIVICMESH_RUNS=~/civicmesh-runs
+
+# 2. Enviar el job a Slurm
+sbatch slurm/run_civicmesh.sh
+
+# 3. Monitorear el job
+squeue -u $USER
+tail -f $CIVICMESH_RUNS/slurm-<JOB_ID>/logs/*.out
+```
+
+### Acceso al frontend (túnel SSH)
+
+El frontend Streamlit se lanza en un nodo GPU del clúster, que no es accesible directamente. Para acceder desde tu máquina local:
+
+```bash
+# Abrir túnel SSH hacia el nodo GPU que corre el frontend
+ssh -L 8501:<gpu-host>:8501 <usuario>@<login-diinf>
+
+# Luego abrir en el navegador:
+# http://localhost:8501
+```
+
+El nombre del nodo GPU se imprime en los logs del job. Ejemplo:
+
+```
+[civicmesh] Lanzando frontend Streamlit en gpu-node-3:8501
+[civicmesh] Acceso: ssh -L 8501:gpu-node-3:8501 usuario@login-diinf
+```
+
+### Experimento de caída de peers
+
+Para probar la resiliencia ante fallos (Sección 5.3 del enunciado):
+
+```bash
+# Matar los peers de un nodo CPU (simula caída de host)
+scancel --signal=TERM <step_id_del_nodo>
+
+# O directamente desde dentro del nodo:
+ssh <cpu-host> "pkill -f run_peer.py"
+```
+
+Los peers sobrevivientes detectarán la caída por timeout de gossip y las métricas reflejarán la degradación en el frontend.
+
+## Frontend de Analítica (UI)
+
+El dashboard de CivicMesh muestra en tiempo real:
+
+1. **Estado por tópico × canal:** último valor objetivo y subjetivo por comuna.
+2. **Convergencia entre peers:** dispersión (spread), estado convergido/divergente.
+3. **Brecha percepción vs realidad:** gap absoluto promedio con normalización por dominio.
+4. **Estado de red:** peers vivos/muertos, porcentaje de disponibilidad.
+5. **Propagación Pub/Sub:** mensajes recibidos, descartados, saltos promedio/máximos.
+
+### Cómo abrir la UI
+
+| Entorno | Comando | URL |
+| --- | --- | --- |
+| **Docker Compose** | `make up` | [http://localhost:8501](http://localhost:8501) |
+| **Local (sin Docker)** | `make frontend` o `python -m streamlit run civicmesh/analytics/frontend.py` | [http://localhost:8501](http://localhost:8501) |
+| **Clúster DIINF** | Se lanza automáticamente por `sbatch`. Conectar con túnel SSH. | `ssh -L 8501:<gpu-host>:8501 usuario@login-diinf` → [http://localhost:8501](http://localhost:8501) |
+| **Demo (sin malla activa)** | `make demo-metrics` y luego `make frontend` | [http://localhost:8501](http://localhost:8501) (apuntar a `runs/demo/metrics`) |
+
+En la barra lateral del dashboard se configura el directorio de métricas, la tolerancia de convergencia, el dominio (`air`/`crime`) y la comuna a visualizar.
 
 ## Seeds y Dataset de Calidad de Aire
-- **Seeds**: Para asegurar que los generadores sean reproducibles, se debe configurar el parámetro `--seed` de manera fija.
-- **Dataset**: La información base sobre la calidad del aire debe estar almacenada localmente o cacheada (ej. en `dataset/`) para realizar replay sin depender de APIs en tiempo real durante la defensa.
+
+- **Seeds**: Para asegurar que los generadores sean reproducibles, se debe configurar el parámetro `--seed` de manera fija (default: `42` en `config.yaml`). La misma semilla produce la misma secuencia de eventos de delitos y la misma trayectoria de percepción.
+- **Dataset**: La información base sobre la calidad del aire está en `datasets/dataset_aire.json`. Para regenerar o actualizar el dataset desde Open-Meteo:
+
+```bash
+python scripts/fetch_open_meteo.py
+```
