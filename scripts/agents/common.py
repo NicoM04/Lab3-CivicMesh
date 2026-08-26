@@ -10,8 +10,10 @@ prioridad, modelos estadísticos). Este módulo concentra:
   con manejo explícito de errores (timeouts, JSON inválido, `gh` ausente)
   y sin filtrar nunca secrets en los mensajes de error;
 - una interfaz opcional a un proveedor de IA configurado por variables de
-  entorno (``AGENT_API_URL``, ``AGENT_API_KEY``, ``AGENT_MODEL``), con
-  fallback determinista a análisis estático si no hay proveedor
+  entorno (``AGENT_API_URL``, ``AGENT_API_KEY``, ``AGENT_MODEL``), que
+  habla el formato "chat completions" compatible con OpenAI (el más
+  interoperable: lo hablan GitHub Models, OpenAI, Azure OpenAI, OpenRouter,
+  etc.), con fallback determinista a análisis estático si no hay proveedor
   configurado o si la llamada falla por cualquier motivo;
 - deduplicación (marcador estable embebido en el cuerpo) y límite de
   issues automáticos por agente, con comportamiento fail-closed si no se
@@ -113,6 +115,13 @@ class AIProviderConfig:
     def call(self, prompt: str, timeout: float = _DEFAULT_TIMEOUT_SECONDS) -> str | None:
         """Intenta obtener una respuesta del proveedor configurado.
 
+        Habla el formato "chat completions" compatible con OpenAI: envía
+        ``{"model": ..., "messages": [{"role": "user", "content": prompt}]}``
+        y espera ``choices[0].message.content`` en la respuesta. Es el
+        contrato que hablan GitHub Models, OpenAI, Azure OpenAI, OpenRouter
+        y equivalentes — apuntar ``AGENT_API_URL`` a cualquiera de ellos
+        funciona sin tocar este código.
+
         Devuelve ``None`` ante cualquier error (URL/red, timeout, HTTP no
         exitoso, JSON inválido o respuesta incompleta) en vez de propagar
         la excepción: una falla de un proveedor externo nunca debe romper
@@ -121,7 +130,12 @@ class AIProviderConfig:
         """
         if not self.is_configured():
             return None
-        payload = json.dumps({"model": self.model, "prompt": prompt}).encode("utf-8")
+        payload = json.dumps(
+            {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+        ).encode("utf-8")
         request = urllib.request.Request(
             self.api_url,  # type: ignore[arg-type]
             data=payload,
@@ -135,6 +149,19 @@ class AIProviderConfig:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 raw_body = response.read()
                 data = json.loads(raw_body.decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            # El código de estado, el motivo y el cuerpo del error no son
+            # sensibles (es texto de error público del proveedor, nunca
+            # contiene la api_key: esta viaja solo en el header Authorization
+            # de la petición, jamás en la respuesta) — incluirlos acorta
+            # mucho el diagnóstico de fallas reales (401 auth, 404 modelo/URL
+            # incorrectos, 410 servicio retirado, 429 límite de tasa, etc.).
+            try:
+                error_body = exc.read().decode("utf-8", errors="replace")[:300]
+            except Exception:  # noqa: BLE001 - lectura best-effort, nunca debe romper el diagnóstico
+                error_body = ""
+            print(f"[agents] proveedor de IA no disponible (HTTP {exc.code}: {exc.reason}) {error_body}")
+            return None
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             print(f"[agents] proveedor de IA no disponible ({type(exc).__name__})")
             return None
@@ -142,11 +169,32 @@ class AIProviderConfig:
             print("[agents] proveedor de IA devolvió una respuesta con JSON inválido")
             return None
 
-        text = data.get("output") if isinstance(data, dict) else None
-        if not isinstance(text, str) or not text.strip():
+        text = self._extract_message_content(data)
+        if not text:
             print("[agents] proveedor de IA devolvió una respuesta incompleta")
             return None
         return text.strip()
+
+    @staticmethod
+    def _extract_message_content(data: object) -> str | None:
+        """``choices[0].message.content`` de una respuesta chat-completions,
+        o ``None`` si la forma no coincide (respuesta incompleta/inesperada).
+        """
+        if not isinstance(data, dict):
+            return None
+        choices = data.get("choices")
+        if not isinstance(choices, list) or not choices:
+            return None
+        first_choice = choices[0]
+        if not isinstance(first_choice, dict):
+            return None
+        message = first_choice.get("message")
+        if not isinstance(message, dict):
+            return None
+        content = message.get("content")
+        if not isinstance(content, str) or not content.strip():
+            return None
+        return content
 
 
 def generate_summary(prompt: str, static_fallback: str, config: AIProviderConfig | None = None) -> str:
@@ -164,6 +212,8 @@ def generate_summary(prompt: str, static_fallback: str, config: AIProviderConfig
         result = config.call(prompt)
         if result:
             return result
+    else:
+        print("[agents] proveedor de IA no configurado (falta AGENT_API_URL/AGENT_API_KEY); usando fallback estático")
     return f"{STATIC_ANALYSIS_MARKER}\n\n{static_fallback}"
 
 

@@ -36,6 +36,29 @@ Laboratorio 3 se creará al terminar el laboratorio, no antes).
 - Sección breve en `README.md` sobre CI, flujo Git y existencia de los
   agentes, enlazando a la documentación detallada.
 
+### Changed
+
+- Documentador y Revisor de bugs ahora usan un proveedor de IA real por
+  defecto (Google Gemini, vía su endpoint compatible con OpenAI), en vez de
+  depender solo del fallback estático. `AIProviderConfig.call()` pasó a
+  hablar el formato "chat completions" compatible con OpenAI (lo hablan
+  Gemini, OpenAI, Groq, Azure OpenAI, OpenRouter, etc.), para poder migrar
+  de proveedor más adelante configurando
+  `AGENT_API_URL`/`AGENT_API_KEY`/`AGENT_MODEL` como secrets del
+  repositorio, sin tocar código. El default original apuntaba a GitHub
+  Models usando el `GITHUB_TOKEN` automático (sin secrets); se descartó
+  tras confirmar en producción que ese servicio responde
+  `410 Gone (github_models_retirement_brownout)` — está siendo retirado.
+  `AGENT_API_KEY` sí requiere configurarse como secret para Gemini (no hay
+  token automático posible con un proveedor externo); sin él, el agente cae
+  directamente al fallback. El fallback determinista de análisis estático
+  se mantiene como red de seguridad ante cualquier falla, y ahora el log de
+  diagnóstico incluye el código HTTP y el cuerpo de la respuesta de error
+  del proveedor (sin exponer la API key) — eso permitió detectar en
+  producción que `gemini-2.0-flash` había sido descontinuado; el default
+  de `AGENT_MODEL` se actualizó a `gemini-3.6-flash` (el reemplazo que
+  indicó el propio mensaje de error de Gemini).
+
 > Nota: esta sección registra únicamente lo que introduce la rama
 > `chore/git-ci-agents-bootstrap`. El resto de los componentes de CivicMesh
 > (Gossip/Membership, Pub/Sub, datos, analítica) se documenta en sus propias

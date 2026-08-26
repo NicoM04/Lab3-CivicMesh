@@ -28,7 +28,9 @@ jobs:
       - name: Ejecutar agente Revisor de Bugs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          AGENT_API_URL: ${{ secrets.AGENT_API_URL }}
+          # Ver agent-documenter.yml: mismo esquema de proveedor de IA
+          # (Google Gemini por defecto; requiere AGENT_API_KEY como secret).
+          AGENT_API_URL: ${{ secrets.AGENT_API_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}
           AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
-          AGENT_MODEL: ${{ secrets.AGENT_MODEL }}
+          AGENT_MODEL: ${{ secrets.AGENT_MODEL || 'gemini-3.6-flash' }}
         run: python -m scripts.agents.bug_reviewer

@@ -94,11 +94,13 @@ Documentador y Revisor de bugs:
 El Revisor de PR usa el mismo mecanismo de marcador, pero sobre comentarios
 de la PR (uno por SHA), para no comentar dos veces el mismo commit.
 
-## Proveedor de IA opcional (fallback estático por defecto)
+## Proveedor de IA (Google Gemini por defecto, con fallback estático)
 
-Los tres agentes soportan, de forma completamente opcional, un proveedor
-generativo externo configurado por variables de entorno (pensadas como
-GitHub Actions secrets):
+Documentador y Revisor de bugs usan `common.generate_summary()` para
+redactar el cuerpo de cada issue con un modelo real; el Revisor de PR no
+llama a ningún proveedor (su comentario es siempre determinista).
+
+El proveedor se configura con tres variables de entorno:
 
 ```text
 AGENT_API_URL
@@ -106,27 +108,79 @@ AGENT_API_KEY
 AGENT_MODEL
 ```
 
-Ninguna tiene un valor real versionado en este repositorio. Si no están
-configuradas, o si la llamada al proveedor falla por cualquier motivo (red,
-timeout, JSON inválido, respuesta incompleta), los agentes usan un
-**fallback determinista de análisis estático**, y la salida lo deja
-explícito con la leyenda:
+`AIProviderConfig.call()` habla el formato **"chat completions" compatible
+con OpenAI** (`{"model", "messages": [...]}` → `choices[0].message.content`),
+que es el que hablan Google Gemini (vía su endpoint de compatibilidad),
+OpenAI, Groq, Azure OpenAI, OpenRouter y equivalentes — apuntar
+`AGENT_API_URL` a cualquiera de ellos funciona sin tocar código.
+
+> **Nota histórica**: la primera versión de esto apuntaba por defecto a
+> GitHub Models usando el `GITHUB_TOKEN` automático (sin secrets). Se
+> descartó porque, al probarlo, el endpoint devolvió
+> `410 Gone — github_models_retirement_brownout`: GitHub está retirando ese
+> servicio. Por eso el default pasó a Google Gemini, que sí requiere una
+> API key propia (no hay forma de que un token "automático" funcione con un
+> proveedor externo).
+
+**Por defecto, `agent-documenter.yml` y `agent-bug-reviewer.yml` apuntan al
+endpoint compatible con OpenAI de
+[Google Gemini](https://aistudio.google.com/apikey)** (capa gratuita, sin
+tarjeta de crédito para empezar):
+
+```yaml
+AGENT_API_URL: ${{ secrets.AGENT_API_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}
+AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
+AGENT_MODEL: ${{ secrets.AGENT_MODEL || 'gemini-3.6-flash' }}
+```
+
+A diferencia de GitHub Models, **`AGENT_API_KEY` sí hay que configurarlo
+como secret del repositorio** (Settings → Secrets and variables → Actions →
+New repository secret) con una API key generada en
+[aistudio.google.com/apikey](https://aistudio.google.com/apikey). Sin ese
+secret, `AIProviderConfig.is_configured()` da `False` y el agente usa
+directamente el fallback estático, sin siquiera intentar la llamada.
+
+Si en algún momento se prefiere otro proveedor compatible con OpenAI (Groq,
+OpenAI, Azure OpenAI, OpenRouter...), basta con sobrescribir los tres
+secrets — tienen prioridad sobre el default de Gemini y no requieren tocar
+código. Ningún valor real está versionado en este repositorio.
+
+Si una llamada falla por *cualquier* motivo (sin `AGENT_API_KEY`, red,
+timeout, límite de tasa, JSON inválido, respuesta incompleta, o el
+proveedor completo caído como pasó con GitHub Models), el agente usa
+automáticamente un **fallback determinista de análisis estático**,
+dejándolo explícito en la salida con la leyenda:
 
 ```text
 ANÁLISIS ESTÁTICO (sin modelo de IA disponible)
 ```
 
 Nunca se afirma que un modelo generativo produjo un resultado que en
-realidad vino del fallback estático.
+realidad vino del fallback estático. El fallback es la red de seguridad,
+no el comportamiento esperado en cada corrida. Para diagnosticar una falla,
+revisar el log de la corrida en GitHub Actions: la línea
+`[agents] proveedor de IA no disponible (...)` indica el tipo de error
+(en un `HTTPError`, incluye el código de estado *y* el cuerpo de la
+respuesta del proveedor — p. ej. así se detectó que GitHub Models estaba
+retirado, y después que `gemini-2.0-flash` había sido descontinuado a
+favor de `gemini-3.6-flash`; en otros casos, `URLError`, `TimeoutError`,
+etc.), sin exponer nunca la API key. Si `AGENT_MODEL` vuelve a quedar
+obsoleto más adelante, el mensaje de error de Gemini normalmente indica el
+modelo de reemplazo directamente.
+
+Gemini también tiene límites de uso por minuto/día en su capa gratuita, y
+el catálogo de modelos puede cambiar — revisar
+[aistudio.google.com](https://aistudio.google.com/) al momento de usarlo y
+ajustar `AGENT_MODEL` si hace falta.
 
 ## Permisos de GitHub Actions usados
 
 | Workflow | Permisos | Motivo |
 | --- | --- | --- |
 | `ci.yml` | `contents: read` | Solo necesita leer el código para testear. |
-| `agent-documenter.yml` | `contents: read`, `issues: write` | Lee el repo, crea issues. |
-| `agent-bug-reviewer.yml` | `contents: read`, `issues: write` | Lee el repo, crea issues. |
-| `agent-pr-reviewer.yml` | `contents: read`, `pull-requests: write`, `actions: read` | Lee el repo, comenta PRs, y lee metadata del `workflow_run` de CI que lo dispara. |
+| `agent-documenter.yml` | `contents: read`, `issues: write`, `models: read` | Lee el repo, crea issues, llama a GitHub Models con el `GITHUB_TOKEN` automático. |
+| `agent-bug-reviewer.yml` | `contents: read`, `issues: write`, `models: read` | Lee el repo, crea issues, llama a GitHub Models con el `GITHUB_TOKEN` automático. |
+| `agent-pr-reviewer.yml` | `contents: read`, `pull-requests: write`, `actions: read` | Lee el repo, comenta PRs, y lee metadata del `workflow_run` de CI que lo dispara. No usa proveedor de IA, no necesita `models: read`. |
 
 Ninguno de los cuatro tiene permisos de escritura sobre `contents` en
 `main`, y ninguno puede aprobar/fusionar Pull Requests (`pull-requests:

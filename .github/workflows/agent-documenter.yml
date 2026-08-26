@@ -28,9 +28,16 @@ jobs:
       - name: Ejecutar agente Documentador
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Proveedor de IA opcional; sin configurar, el agente usa un
-          # fallback determinista de análisis estático (ver scripts/agents/README.md).
-          AGENT_API_URL: ${{ secrets.AGENT_API_URL }}
+          # Proveedor de IA: por defecto apunta al endpoint compatible con
+          # OpenAI de Google Gemini (capa gratis vía aistudio.google.com).
+          # AGENT_API_KEY SÍ hay que configurarlo como secret del repo (no
+          # hay token automático posible para un proveedor externo) — sin
+          # él, is_configured() da False y el agente usa directamente su
+          # fallback de análisis estático, sin intentar la llamada. Si más
+          # adelante se prefiere otro proveedor compatible con OpenAI
+          # (Groq, OpenAI, Azure OpenAI, OpenRouter...), basta con
+          # sobrescribir los tres secrets, sin tocar código.
+          AGENT_API_URL: ${{ secrets.AGENT_API_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}
           AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
-          AGENT_MODEL: ${{ secrets.AGENT_MODEL }}
+          AGENT_MODEL: ${{ secrets.AGENT_MODEL || 'gemini-3.6-flash' }}
         run: python -m scripts.agents.documenter
